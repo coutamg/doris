@@ -778,6 +778,7 @@ Status OlapScanNode::start_scan_thread(RuntimeState* state) {
                  ++j, ++i) {
                 scanner_ranges.push_back((*ranges)[i].get());
             }
+			// OlapScanner对一个tablet数据读取操作整体的封装
             OlapScanner* scanner = new OlapScanner(state, this, _olap_scan_node.is_preaggregation,
                                                    _need_agg_finalize, *scan_range, scanner_ranges);
             // add scanner to pool before doing prepare.

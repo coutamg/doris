@@ -47,6 +47,7 @@ TResourceInfo* ResourceTls::get_resource_tls() {
     if (!s_is_init) {
         return nullptr;
     }
+	// 线程中保留的的内容
     return (TResourceInfo*)pthread_getspecific(s_resource_key);
 }
 

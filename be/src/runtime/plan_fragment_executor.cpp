@@ -151,6 +151,10 @@ Status PlanFragmentExecutor::prepare(const TExecPlanFragmentParams& request,
 
     // set up plan
     DCHECK(request.__isset.fragment);
+	/* request.fragment.plan 中制定了该 plan 对应的 ExecNode 是什么类型的，如果是查询
+	*  则 plan 的 ExecNode 对应的就是 ScanNode(OlapScanNode), 调用ScanNode(OlapScanNode) 
+	*  对应的方法。具体有哪些 Node 可以参考 be/src/exec/ 目录中的 xxx_node 文件
+	*/
     RETURN_IF_ERROR(ExecNode::create_tree(_runtime_state.get(), obj_pool(), request.fragment.plan,
                                           *desc_tbl, &_plan));
     _runtime_state->set_fragment_root_id(_plan->id());
@@ -195,6 +199,10 @@ Status PlanFragmentExecutor::prepare(const TExecPlanFragmentParams& request,
 
     // set up sink, if required
     if (request.fragment.__isset.output_sink) {
+		/* 根据 output_sink.type 来确定是什么类型的 sink，目前有 DATA_STREAM_SINK,
+		   RESULT_SINK, DATA_SPLIT_SINK, MYSQL_TABLE_SINK, EXPORT_SINK, 
+		   OLAP_TABLE_SINK, MEMORY_SCRATCH_SINK, ODBC_TABLE_SINK 八种类型的 sink
+		*/
         RETURN_IF_ERROR(DataSink::create_data_sink(obj_pool(), request.fragment.output_sink,
                                                    request.fragment.output_exprs, params,
                                                    row_desc(), &_sink));
