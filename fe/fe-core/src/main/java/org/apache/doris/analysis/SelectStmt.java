@@ -64,6 +64,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
+ * 对于select类型的sql， Parse之后生成了SelectStmt结构.
+ * SelectStmt结构包含了SelectList，FromClause，WhereClause，GroupByClause，SortInfo等结构
+ * 
  * Representation of a single select block, including GROUP BY, ORDER BY and HAVING
  * clauses.
  */

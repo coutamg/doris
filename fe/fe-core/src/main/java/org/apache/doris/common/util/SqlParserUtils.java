@@ -87,8 +87,10 @@ public class SqlParserUtils {
     }
 
     public static StatementBase parseAndAnalyzeStmt(String originStmt, ConnectContext ctx) throws UserException {
-        LOG.info("begin to parse stmt: " + originStmt);
-        SqlScanner input = new SqlScanner(new StringReader(originStmt), ctx.getSessionVariable().getSqlMode());
+		LOG.info("begin to parse stmt: " + originStmt);
+		// 将 sql 语句解析成 token
+		SqlScanner input = new SqlScanner(new StringReader(originStmt), ctx.getSessionVariable().getSqlMode());
+		// 这里是把解析的 token 生成一个 AST, 每个节点都是 ParseNode
         SqlParser parser = new SqlParser(input);
         Analyzer analyzer = new Analyzer(ctx.getCatalog(), ctx);
         StatementBase statementBase;
@@ -106,7 +108,8 @@ public class SqlParserUtils {
             String errorMsg = String.format("get exception when parse stmt. Origin stmt is %s . Error msg is %s.",
                     originStmt, e.getMessage());
             throw new AnalysisException(errorMsg);
-        }
+		}
+		// 这里进行 sql 的 analyze
         statementBase.analyze(analyzer);
         return statementBase;
     }

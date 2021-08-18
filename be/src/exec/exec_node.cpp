@@ -291,6 +291,7 @@ Status ExecNode::create_tree_helper(RuntimeState* state, ObjectPool* pool,
 
     int num_children = tnodes[*node_idx].num_children;
     ExecNode* node = NULL;
+	// 创建对应类型的 node
     RETURN_IF_ERROR(create_node(state, pool, tnodes[*node_idx], descs, &node));
 
     // assert(parent != NULL || (node_idx == 0 && root_expr != NULL));
