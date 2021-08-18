@@ -1,19 +1,23 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
 """
-This module is palo builtin functions
+This module is doris builtin functions
 """
 
 import sys
 import os
 from string import Template
-import palo_builtins_functions
+import doris_builtins_functions
 
 java_registry_preamble = '\
-//  Modifications copyright (C) 2017, Baidu.com, Inc. \n\
-//  Copyright 2017 The Apache Software Foundation \n\
-// \n\
-//  Licensed under the Apache License, Version 2.0 (the "License");\n\
-//  you may not use this file except in compliance with the License.\n\
-//  You may obtain a copy of the License at\n\
+// Licensed to the Apache Software Foundation (ASF) under one \n\
+// or more contributor license agreements.  See the NOTICE file \n\
+// distributed with this work for additional information \n\
+// regarding copyright ownership.  The ASF licenses this file \n\
+// to you under the Apache License, Version 2.0 (the \n\
+// "License"); you may not use this file except in compliance \n\
+// with the License.  You may obtain a copy of the License at \n\
 // \n\
 //  http://www.apache.org/licenses/LICENSE-2.0\n\
 // \n\
@@ -26,12 +30,14 @@ java_registry_preamble = '\
 // This is a generated file, DO NOT EDIT.\n\
 // To add new functions, see the generator at\n\
 // common/function-registry/gen_builtins_catalog.py or the function list at\n\
-// common/function-registry/palo_builtins_functions.py.\n\
+// common/function-registry/doris_builtins_functions.py.\n\
 \n\
-package com.baidu.palo.builtins;\n\
+package org.apache.doris.builtins;\n\
 \n\
-import com.baidu.palo.catalog.PrimitiveType;\n\
-import com.baidu.palo.catalog.FunctionSet;\n\
+import org.apache.doris.catalog.PrimitiveType;\n\
+import org.apache.doris.catalog.FunctionSet;\n\
+import com.google.common.collect.Sets;\n\
+import java.util.Set;\n\
 \n\
 public class ScalarBuiltins { \n\
     public static void initBuiltins(FunctionSet functionSet) { \
@@ -41,7 +47,8 @@ java_registry_epilogue = '\
   }\n\
 }\n'
 
-FE_PATH = "../java/com/baidu/palo/builtins/"
+FE_PATH = "../../../fe/fe-core/target/generated-sources/build/org/apache/doris/builtins/"
+print(FE_PATH)
 
 # This contains all the metadata to describe all the builtins.
 # Each meta data entry is itself a map to store all the meta data
@@ -53,7 +60,7 @@ def add_function(fn_meta_data, user_visible):
     """add function
     """
     assert 4 <= len(fn_meta_data) <= 6, \
-            "Invalid function entry in palo_builtins_functions.py:\n\t" + repr(fn_meta_data)
+            "Invalid function entry in doris_builtins_functions.py:\n\t" + repr(fn_meta_data)
     entry = {}
     entry["sql_names"] = fn_meta_data[0]
     entry["ret_type"] = fn_meta_data[1]
@@ -107,16 +114,29 @@ def generate_fe_registry_init(filename):
     for entry in meta_data_entries:
         for name in entry["sql_names"]:
             java_output = generate_fe_entry(entry, name)
-            java_registry_file.write("    functionSet.addScalarBuiltin(%s);\n" % java_output)
+            java_registry_file.write("        functionSet.addScalarBuiltin(%s);\n" % java_output)
 
     java_registry_file.write("\n")
+
+    # add non_null_result_with_null_param_functions
+    java_registry_file.write("        Set<String> funcNames = Sets.newHashSet();\n")
+    for entry in doris_builtins_functions.non_null_result_with_null_param_functions:
+        java_registry_file.write("        funcNames.add(\"%s\");\n" % entry)
+    java_registry_file.write("        functionSet.buildNonNullResultWithNullParamFunction(funcNames);\n");
+
+    # add nondeterministic functions
+    java_registry_file.write("        Set<String> nondeterministicFuncNames = Sets.newHashSet();\n")
+    for entry in doris_builtins_functions.nondeterministic_functions:
+        java_registry_file.write("        nondeterministicFuncNames.add(\"%s\");\n" % entry)
+    java_registry_file.write("        functionSet.buildNondeterministicFunctions(nondeterministicFuncNames);\n");
+
     java_registry_file.write(java_registry_epilogue)
     java_registry_file.close()
 
 # Read the function metadata inputs
-for function in palo_builtins_functions.visible_functions:
+for function in doris_builtins_functions.visible_functions:
     add_function(function, True)
-for function in palo_builtins_functions.invisible_functions:
+for function in doris_builtins_functions.invisible_functions:
     add_function(function, False)
 
 if not os.path.exists(FE_PATH):

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef  BDG_PALO_BE_SRC_COMMON_UTIL_MEM_UTIL_HPP
-#define  BDG_PALO_BE_SRC_COMMON_UTIL_MEM_UTIL_HPP
+#ifndef  DORIS_BE_SRC_COMMON_UTIL_MEM_UTIL_HPP
+#define  DORIS_BE_SRC_COMMON_UTIL_MEM_UTIL_HPP
 
 #include <string.h>
 
-namespace palo {
+namespace doris {
 
 template<const size_t N>
 inline void fixed_size_memory_copy(void* dst, const void* src) {
@@ -53,6 +50,8 @@ template<> inline void fixed_size_memory_copy<8>(void* dst, const void* src) {
 }
 
 inline void memory_copy(void* dst, const void* src, size_t size) {
+// Function fixed_size_memory_copy will report a stack-use-after-scope error in ASAN mode.
+#if !defined(ADDRESS_SANITIZER)
     static const void* addrs[] = {
         &&B0, &&B1, &&B2, &&B3, &&B4, &&B5, &&B6, 
         &&B7, &&B8, &&B9, &&B10, &&B11, &&B12, &&B13,
@@ -618,6 +617,7 @@ B254:
 B255:
         return fixed_size_memory_copy<255>(dst, src);
     }
+#endif
 
     memcpy(dst, src, size);
     return;
@@ -625,6 +625,6 @@ B255:
 
 }
 
-#endif  // BDG_PALO_BE_SRC_COMMON_SRC_UTIL_MEM_UTIL_H
+#endif  // DORIS_BE_SRC_COMMON_SRC_UTIL_MEM_UTIL_H
 
 /* vim: set expandtab ts=4 sw=4 sts=4 tw=100: */

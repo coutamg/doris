@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,16 +15,19 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_MYSQL_TABLE_WRITER_H
-#define BDG_PALO_BE_RUNTIME_MYSQL_TABLE_WRITER_H
+#ifndef DORIS_BE_RUNTIME_MYSQL_TABLE_WRITER_H
+#define DORIS_BE_RUNTIME_MYSQL_TABLE_WRITER_H
 
 #include <string>
 #include <vector>
-#include <mysql/mysql.h>
 
 #include "common/status.h"
 
-namespace palo {
+#ifndef __DorisMysql
+#define __DorisMysql void
+#endif
+
+namespace doris {
 
 struct MysqlConnInfo {
     std::string host;
@@ -47,31 +48,25 @@ public:
     MysqlTableWriter(const std::vector<ExprContext*>& output_exprs);
     ~MysqlTableWriter();
 
-    // connnect to mysql server 
+    // connect to mysql server
     Status open(const MysqlConnInfo& conn_info, const std::string& tbl);
 
-    Status begin_trans() {
-        return Status::OK;
-    }
+    Status begin_trans() { return Status::OK(); }
 
     Status append(RowBatch* batch);
 
-    Status abort_tarns() {
-        return Status::OK;
-    }
+    Status abort_tarns() { return Status::OK(); }
 
-    Status finish_tarns() {
-        return Status::OK;
-    }
+    Status finish_tarns() { return Status::OK(); }
 
 private:
     Status insert_row(TupleRow* row);
 
     const std::vector<ExprContext*>& _output_expr_ctxs;
     std::string _mysql_tbl;
-    MYSQL* _mysql_conn;
+    __DorisMysql* _mysql_conn;
 };
 
-}
+} // namespace doris
 
 #endif

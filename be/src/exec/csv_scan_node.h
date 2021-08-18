@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,20 +15,19 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_CSV_SCAN_NODE_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_CSV_SCAN_NODE_H
-
-#include <fstream>
-#include <sstream>
+#ifndef DORIS_BE_SRC_QUERY_EXEC_CSV_SCAN_NODE_H
+#define DORIS_BE_SRC_QUERY_EXEC_CSV_SCAN_NODE_H
 
 #include <boost/scoped_ptr.hpp>
+#include <fstream>
+#include <sstream>
 
 #include "common/config.h"
 #include "exec/csv_scanner.h"
 #include "exec/scan_node.h"
 #include "runtime/descriptors.h"
 
-namespace palo {
+namespace doris {
 
 class TextConverter;
 class Tuple;
@@ -66,25 +63,20 @@ public:
     virtual void debug_string(int indentation_level, std::stringstream* out) const;
 
 private:
-    bool check_and_write_text_slot(
-            const std::string& column_name, const TColumnType& column_type,
-            const char* value, int value_length,
-            const SlotDescriptor* slot, RuntimeState* state,
-            std::stringstream* error_msg);
+    bool check_and_write_text_slot(const std::string& column_name, const TColumnType& column_type,
+                                   const char* value, int value_length, const SlotDescriptor* slot,
+                                   RuntimeState* state, std::stringstream* error_msg);
 
-    // split one line into fields, check every fields, fill every filed into tuple
+    // split one line into fields, check every fields, fill every field into tuple
     bool split_check_fill(const std::string& line, RuntimeState* state);
 
-    void fill_fix_length_string(
-            const char* value, int value_length, MemPool* pool,
-            char** new_value, int new_value_length);
-    bool check_decimal_input(
-            const char* value, int value_length,
-            int precision, int scale,
-            std::stringstream* error_msg);
-    
-    void hll_hash(const char* src, int len,  std::string* result);
-    
+    void fill_fix_length_string(const char* value, int value_length, MemPool* pool,
+                                char** new_value, int new_value_length);
+    bool check_decimal_input(const char* value, int value_length, int precision, int scale,
+                             std::stringstream* error_msg);
+
+    void hll_hash(const char* src, int len, std::string* result);
+
     bool check_hll_function(TMiniLoadEtlFunction& function);
 
     // Tuple id resolved in prepare() to set _tuple_desc;
@@ -128,8 +120,8 @@ private:
     // Current RuntimeState
     RuntimeState* _runtime_state;
 
-    int64_t _error_row_number = 0L;
-    int64_t _normal_row_number = 0L;
+    int64_t _num_rows_load_total = 0L;
+    int64_t _num_rows_load_filtered = 0L;
 
     RuntimeProfile::Counter* _split_check_timer;
     RuntimeProfile::Counter* _split_line_timer;
@@ -138,7 +130,6 @@ private:
     std::map<std::string, SlotDescriptor*> _column_slot_map;
 };
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_QUERY_EXEC_CSV_SCAN_NODE_H
-
+#endif // DORIS_BE_SRC_QUERY_EXEC_CSV_SCAN_NODE_H

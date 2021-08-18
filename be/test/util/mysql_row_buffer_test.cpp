@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,142 +15,113 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <gtest/gtest.h>
-
 #include "util/mysql_row_buffer.h"
 
-using namespace std;
+#include <gtest/gtest.h>
+#include <string.h>
+#include <sys/types.h>
 
-namespace palo {
+#include <string>
 
-class MysqlRowBufferTest : public testing::Test {
-public:
-    MysqlRowBufferTest() {
-    }
+#include "env/env.h"
+#include "gutil/strings/util.h"
+#include "util/logging.h"
 
-protected:
-    virtual void SetUp() {
-    }
-};
+namespace doris {
 
-TEST_F(MysqlRowBufferTest, tinyint) {
-    MysqlRowBuffer buffer;
+using namespace strings;
 
-    ASSERT_EQ(0, buffer.PushTinyInt(-111));
-    ASSERT_EQ(4, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-111", buffer.buf() + 1);
+TEST(MysqlRowBufferTest, basic) {
+    MysqlRowBuffer mrb;
 
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushTinyInt(100));
-    ASSERT_EQ(3, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("100", buffer.buf() + 1);
+    std::string s("test");
+    mrb.push_tinyint(5);
+    mrb.push_smallint(120);
+    mrb.push_int(-30000);
+    mrb.push_bigint(900000);
+    mrb.push_unsigned_bigint(90000000);
+    mrb.push_float(56.45);
+    mrb.push_double(10.12);
+    mrb.push_string(s.c_str(), 4);
+    mrb.push_null();
 
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushTinyInt(255));
-    ASSERT_EQ(2, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-1", buffer.buf() + 1);
+    const char* buf = mrb.buf();
+
+    // mem: size-data-size-data
+    // 1-'5'-3-'120'-6-'-30000'-6-'900000'-8-'90000000'-5-'56.45'-5-'10.12'-4-'test'-251
+    // 1b-1b-1b-3b--1b-----6b--1b----6b---1b-----8b----1b---5b---1b---5b---1b---4b---1b
+    // 0  1  2  3   6      7   13    14   20     21    29   30   35   36   41   42   46
+    EXPECT_EQ(47, mrb.length());
+
+    EXPECT_EQ(1, *((int8_t*)(buf)));
+    EXPECT_EQ(0, strncmp(buf + 1, "5", 1));
+
+    EXPECT_EQ(3, *((int8_t*)(buf + 2)));
+    EXPECT_EQ(0, strncmp(buf + 3, "120", 3));
+
+    EXPECT_EQ(6, *((int8_t*)(buf + 6)));
+    EXPECT_EQ(0, strncmp(buf + 7, "-30000", 6));
+
+    EXPECT_EQ(6, *((int8_t*)(buf + 13)));
+    EXPECT_EQ(0, strncmp(buf + 14, "900000", 6));
+
+    EXPECT_EQ(8, *((int8_t*)(buf + 20)));
+    EXPECT_EQ(0, strncmp(buf + 21, "90000000", 8));
+
+    EXPECT_EQ(5, *((int8_t*)(buf + 29)));
+    EXPECT_EQ(0, strncmp(buf + 30, "56.45", 5));
+
+    EXPECT_EQ(5, *((int8_t*)(buf + 35)));
+    EXPECT_EQ(0, strncmp(buf + 36, "10.12", 5));
+
+    EXPECT_EQ(4, *((int8_t*)(buf + 41)));
+    EXPECT_EQ(0, strncmp(buf + 42, "test", 4));
+
+    EXPECT_EQ(251, *((uint8_t*)(buf + 46)));
 }
 
-TEST_F(MysqlRowBufferTest, smallint) {
-    MysqlRowBuffer buffer;
+TEST(MysqlRowBufferTest, dynamic_mode) {
+    MysqlRowBuffer mrb;
 
-    ASSERT_EQ(0, buffer.PushSmallInt(-10000));
-    ASSERT_EQ(6, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-10000", buffer.buf() + 1);
+    mrb.open_dynamic_mode();
 
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushSmallInt(32767));
-    ASSERT_EQ(5, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("32767", buffer.buf() + 1);
+    std::string s("test");
+    mrb.push_tinyint(5);
+    mrb.push_smallint(120);
+    mrb.push_int(-30000);
+    mrb.push_bigint(900000);
+    mrb.push_unsigned_bigint(90000000);
+    mrb.push_float(56.45);
+    mrb.push_double(10.12);
+    mrb.push_string(s.c_str(), 4);
+    mrb.push_null();
 
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushSmallInt(65535));
-    ASSERT_EQ(2, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-1", buffer.buf() + 1);
+    mrb.close_dynamic_mode();
+
+    const char* buf = mrb.buf();
+
+    // mem: size-data-data
+    // 254-48-'5'-'120'-'-30000'-'900000'-'90000000'-'56.45'-'10.12'-'test'-''
+    // 1b--8b-1b----3b-----6b-------6b--------8b-------5b------5b------4b---0b
+    // 0   1  9     10     13       19        25       33      38      43   47
+    EXPECT_EQ(47, mrb.length());
+
+    EXPECT_EQ(254, *((uint8_t*)(buf)));
+    EXPECT_EQ(38, *((int64_t*)(buf + 1)));
+
+    EXPECT_EQ(0, strncmp(buf + 9, "5", 1));
+    EXPECT_EQ(0, strncmp(buf + 10, "120", 3));
+    EXPECT_EQ(0, strncmp(buf + 13, "-30000", 6));
+    EXPECT_EQ(0, strncmp(buf + 19, "900000", 6));
+    EXPECT_EQ(0, strncmp(buf + 25, "90000000", 8));
+    EXPECT_EQ(0, strncmp(buf + 33, "56.45", 5));
+    EXPECT_EQ(0, strncmp(buf + 38, "10.12", 5));
+    EXPECT_EQ(0, strncmp(buf + 43, "test", 4));
 }
 
-TEST_F(MysqlRowBufferTest, int) {
-    MysqlRowBuffer buffer;
-
-    ASSERT_EQ(0, buffer.PushInt(-10000));
-    ASSERT_EQ(6, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-10000", buffer.buf() + 1);
-
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushInt(32767));
-    ASSERT_EQ(5, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("32767", buffer.buf() + 1);
-
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushInt(4294967295));
-    ASSERT_EQ(2, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-1", buffer.buf() + 1);
-}
-TEST_F(MysqlRowBufferTest, bigint) {
-    MysqlRowBuffer buffer;
-
-    ASSERT_EQ(0, buffer.PushBigInt(-1000000000));
-    ASSERT_EQ(11, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-1000000000", buffer.buf() + 1);
-
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushBigInt(1000032767));
-    ASSERT_EQ(10, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("1000032767", buffer.buf() + 1);
-}
-TEST_F(MysqlRowBufferTest, float) {
-    MysqlRowBuffer buffer;
-
-    ASSERT_EQ(0, buffer.PushFloat(-1.1));
-    ASSERT_EQ(4, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-1.1", buffer.buf() + 1);
-
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushFloat(1000.12));
-    ASSERT_EQ(7, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("1000.12", buffer.buf() + 1);
-}
-TEST_F(MysqlRowBufferTest, double) {
-    MysqlRowBuffer buffer;
-
-    ASSERT_EQ(0, buffer.PushDouble(-1.1));
-    ASSERT_EQ(4, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("-1.1", buffer.buf() + 1);
-
-    buffer.Reset();
-    ASSERT_EQ(0, buffer.PushDouble(1000.001));
-    ASSERT_EQ(8, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("1000.001", buffer.buf() + 1);
-}
-
-TEST_F(MysqlRowBufferTest, string) {
-    MysqlRowBuffer buffer;
-
-    ASSERT_EQ(0, buffer.PushString("hello", 6));
-    ASSERT_EQ(6, *(int8_t*)buffer.buf());
-    ASSERT_STREQ("hello", buffer.buf() + 1);
-    ASSERT_NE(0, buffer.PushString(NULL, 6));
-}
-
-TEST_F(MysqlRowBufferTest, long_buffer) {
-    MysqlRowBuffer buffer;
-
-    for (int i = 0; i < 5000; ++i) {
-        ASSERT_EQ(0, buffer.PushInt(10000));
-    }
-
-    ASSERT_EQ(30000, buffer.length());
-}
-
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
-        fprintf(stderr, "error read config file. \n");
-        return -1;
-    }
-    init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

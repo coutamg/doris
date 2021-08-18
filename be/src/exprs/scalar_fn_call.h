@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,15 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_SCALAR_FN_CALL_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_SCALAR_FN_CALL_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_SCALAR_FN_CALL_H
+#define DORIS_BE_SRC_QUERY_EXPRS_SCALAR_FN_CALL_H
 
 #include <string>
 
+#include "common/object_pool.h"
 #include "exprs/expr.h"
 #include "udf/udf.h"
 
-namespace palo {
+namespace doris {
 
 class TExprNode;
 
@@ -52,7 +50,7 @@ class ScalarFnCall : public Expr {
 public:
     virtual std::string debug_string() const;
     virtual ~ScalarFnCall();
-    virtual Expr* clone(ObjectPool* pool) const override { 
+    virtual Expr* clone(ObjectPool* pool) const override {
         return pool->add(new ScalarFnCall(*this));
     }
 
@@ -60,28 +58,26 @@ protected:
     friend class Expr;
 
     ScalarFnCall(const TExprNode& node);
-    virtual Status prepare(
-        RuntimeState* state, const RowDescriptor& desc, ExprContext* context);
-    virtual Status open(
-        RuntimeState* state, ExprContext* context, FunctionContext::FunctionStateScope scope);
-    virtual void close(
-        RuntimeState* state, ExprContext* context, FunctionContext::FunctionStateScope scope);
-    virtual Status get_codegend_compute_fn(RuntimeState* state, llvm::Function** fn) override;
+    virtual Status prepare(RuntimeState* state, const RowDescriptor& desc, ExprContext* context);
+    virtual Status open(RuntimeState* state, ExprContext* context,
+                        FunctionContext::FunctionStateScope scope);
+    virtual void close(RuntimeState* state, ExprContext* context,
+                       FunctionContext::FunctionStateScope scope);
 
     virtual bool is_constant() const;
 
-    virtual palo_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::TinyIntVal get_tiny_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::SmallIntVal get_small_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::IntVal get_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::BigIntVal get_big_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::LargeIntVal get_large_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::FloatVal get_float_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::DoubleVal get_double_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::StringVal get_string_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::DateTimeVal get_datetime_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::DecimalVal get_decimal_val(ExprContext* context, TupleRow*);
-    // virtual palo_udf::ArrayVal GetArrayVal(ExprContext* context, TupleRow*);
+    virtual doris_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::TinyIntVal get_tiny_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::SmallIntVal get_small_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::IntVal get_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::BigIntVal get_big_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::LargeIntVal get_large_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::FloatVal get_float_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::DoubleVal get_double_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::StringVal get_string_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::DateTimeVal get_datetime_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::DecimalV2Val get_decimalv2_val(ExprContext* context, TupleRow*);
+    virtual CollectionVal get_array_val(ExprContext* context, TupleRow*);
 
 private:
     /// If this function has var args, children()[_vararg_start_idx] is the first vararg
@@ -112,9 +108,6 @@ private:
         return _vararg_start_idx >= 0 ? _vararg_start_idx : _children.size();
     }
 
-    /// Loads the native or IR function from HDFS and puts the result in *udf.
-    Status get_udf(RuntimeState* state, llvm::Function** udf);
-
     /// Loads the native or IR function 'symbol' from HDFS and puts the result in *fn.
     /// If the function is loaded from an IR module, it cannot be called until the module
     /// has been JIT'd (i.e. after Prepare() has completed).
@@ -123,14 +116,13 @@ private:
     /// Evaluates the children exprs and stores the results in input_vals. Used in the
     /// interpreted path.
     void evaluate_children(ExprContext* context, TupleRow* row,
-                          std::vector<palo_udf::AnyVal*>* input_vals);
+                           std::vector<doris_udf::AnyVal*>* input_vals);
 
     /// Function to call _scalar_fn. Used in the interpreted path.
-    template<typename RETURN_TYPE>
+    template <typename RETURN_TYPE>
     RETURN_TYPE interpret_eval(ExprContext* context, TupleRow* row);
 };
 
-}
+} // namespace doris
 
 #endif
-

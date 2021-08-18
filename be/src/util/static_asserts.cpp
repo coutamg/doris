@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,24 +15,20 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <boost/static_assert.hpp>
-
-#include "runtime/decimal_value.h"
-#include "runtime/string_value.h"
 #include "runtime/datetime_value.h"
+#include "runtime/string_value.h"
 
-namespace palo {
+namespace doris {
 // This class is unused.  It contains static (compile time) asserts.
 // This is useful to validate struct sizes and other similar things
 // at compile time.  If these asserts fail, the compile will fail.
 class UnusedClass {
 private:
-    BOOST_STATIC_ASSERT(sizeof(StringValue) == 16);
-    BOOST_STATIC_ASSERT(offsetof(StringValue, len) == 8);
+    static_assert(sizeof(StringValue) == 16);
+    static_assert(offsetof(StringValue, len) == 8);
     // Datetime value
-    BOOST_STATIC_ASSERT(sizeof(DateTimeValue) == 16);
-    // BOOST_STATIC_ASSERT(offsetof(DateTimeValue, _year) == 8);
-    BOOST_STATIC_ASSERT(sizeof(DecimalValue) == 40);
+    static_assert(sizeof(DateTimeValue) == 16);
+    // static_assert(offsetof(DateTimeValue, _year) == 8);
 };
 
-}
+} // namespace doris

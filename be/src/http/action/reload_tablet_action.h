@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,16 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef  BDG_PALO_BE_SRC_HTTP_RELOAD_TABLET_ACTION_H
-#define  BDG_PALO_BE_SRC_HTTP_RELOAD_TABLET_ACTION_H
+#ifndef DORIS_BE_SRC_HTTP_RELOAD_TABLET_ACTION_H
+#define DORIS_BE_SRC_HTTP_RELOAD_TABLET_ACTION_H
 
 #include <boost/scoped_ptr.hpp>
 
-#include "http/http_handler.h"
-#include "olap/command_executor.h"
 #include "gen_cpp/AgentService_types.h"
+#include "http/http_handler.h"
 
-namespace palo {
+namespace doris {
 
 class ExecEnv;
 
@@ -34,22 +31,16 @@ class ReloadTabletAction : public HttpHandler {
 public:
     ReloadTabletAction(ExecEnv* exec_env);
 
-    virtual ~ReloadTabletAction() {
-        if (_command_executor != NULL) {
-            delete _command_executor;
-        }
-    }
+    virtual ~ReloadTabletAction() {}
 
-    virtual void handle(HttpRequest *req, HttpChannel *channel);
+    void handle(HttpRequest* req) override;
+
 private:
-    void reload(const std::string& path, int64_t tablet_id, int32_t schema_hash, 
-                HttpRequest *req, HttpChannel *channel);
+    void reload(const std::string& path, int64_t tablet_id, int32_t schema_hash, HttpRequest* req);
 
     ExecEnv* _exec_env;
-    CommandExecutor* _command_executor;
 
 }; // end class ReloadTabletAction
 
-} // end namespace palo
-#endif // BDG_PALO_BE_SRC_COMMON_UTIL_DOWNLOAD_ACTION_H
-
+} // end namespace doris
+#endif // DORIS_BE_SRC_COMMON_UTIL_DOWNLOAD_ACTION_H

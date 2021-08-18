@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,15 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_OLAP_REWRITE_NODE_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_OLAP_REWRITE_NODE_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_OLAP_REWRITE_NODE_H
+#define DORIS_BE_SRC_QUERY_EXEC_OLAP_REWRITE_NODE_H
 
 #include <memory>
 
 #include "exec/exec_node.h"
 #include "runtime/mem_pool.h"
 
-namespace palo {
+namespace doris {
 
 class Tuple;
 class TupleRow;
@@ -35,8 +33,8 @@ class OlapRewriteNode : public ExecNode {
 public:
     OlapRewriteNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
 
-    virtual Status init(const TPlanNode& tnode);
-    virtual ~OlapRewriteNode() { }
+    virtual Status init(const TPlanNode& tnode, RuntimeState* state = nullptr);
+    virtual ~OlapRewriteNode() {}
     virtual Status prepare(RuntimeState* state);
     virtual Status open(RuntimeState* state);
     virtual Status get_next(RuntimeState* state, RowBatch* row_batch, bool* eos);
@@ -64,9 +62,9 @@ private:
     TupleId _output_tuple_id;
     TupleDescriptor* _output_tuple_desc;
 
-    std::vector<DecimalValue> _max_decimal_val;
+    std::vector<DecimalV2Value> _max_decimalv2_val;
 };
 
-}
+} // namespace doris
 
 #endif

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,16 +15,18 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_DISK_INFO_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_DISK_INFO_H
-
-#include <map>
-#include <string>
+#ifndef DORIS_BE_SRC_COMMON_UTIL_DISK_INFO_H
+#define DORIS_BE_SRC_COMMON_UTIL_DISK_INFO_H
 
 #include <boost/cstdint.hpp>
-#include "common/logging.h"
+#include <map>
+#include <set>
+#include <string>
 
-namespace palo {
+#include "common/logging.h"
+#include "common/status.h"
+
+namespace doris {
 
 // DiskInfo is an interface to query for the disk information at runtime.  This
 // contains information about the system as well as the specific data node
@@ -80,6 +79,10 @@ public:
 
     static std::string debug_string();
 
+    // get disk devices of given path
+    static Status get_disk_devices(const std::vector<std::string>& paths,
+                                   std::set<std::string>* devices);
+
 private:
     static bool _s_initialized;
 
@@ -96,8 +99,8 @@ private:
         Disk() : name(""), id(0) {}
         Disk(const std::string& name) : name(name), id(0), is_rotational(true) {}
         Disk(const std::string& name, int id) : name(name), id(id), is_rotational(true) {}
-        Disk(const std::string& name, int id, bool is_rotational) :
-                name(name), id(id), is_rotational(is_rotational) {}
+        Disk(const std::string& name, int id, bool is_rotational)
+                : name(name), id(id), is_rotational(is_rotational) {}
     };
 
     // All disks
@@ -114,5 +117,5 @@ private:
     static void get_device_names();
 };
 
-}
+} // namespace doris
 #endif

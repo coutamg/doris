@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,18 +15,20 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "util/lru_cache.hpp"
-
-#include <memory>
 #include <gtest/gtest.h>
 
-namespace palo {
+#include <memory>
 
-class LruCacheTest : public testing::Test {
-};
+#include "common/config.h"
+#include "util/logging.h"
+#include "util/lru_cache.hpp"
+
+namespace doris {
+
+class LruCacheTest : public testing::Test {};
 
 struct Foo {
-    Foo(int num_param): num(num_param) { }
+    Foo(int num_param) : num(num_param) {}
     int num;
 };
 
@@ -91,9 +90,15 @@ TEST_F(LruCacheTest, OverSize) {
     }
 }
 
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
+        fprintf(stderr, "error read config file. \n");
+        return -1;
+    }
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

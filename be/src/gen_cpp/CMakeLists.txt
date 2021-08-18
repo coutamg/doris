@@ -1,5 +1,3 @@
-# Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -28,12 +26,20 @@ set(SRC_FILES
     ${GEN_CPP_DIR}/BackendService.cpp
     ${GEN_CPP_DIR}/BackendService_types.cpp
     ${GEN_CPP_DIR}/PaloBrokerService_types.cpp
+    ${GEN_CPP_DIR}/TDorisExternalService.cpp
+    ${GEN_CPP_DIR}/DorisExternalService_types.cpp
+    ${GEN_CPP_DIR}/DorisExternalService_constants.cpp
+    ${GEN_CPP_DIR}/QueryPlanExtra_types.cpp
+    ${GEN_CPP_DIR}/QueryPlanExtra_constants.cpp
     ${GEN_CPP_DIR}/TPaloBrokerService.cpp
     ${GEN_CPP_DIR}/HeartbeatService_constants.cpp
     ${GEN_CPP_DIR}/HeartbeatService.cpp
     ${GEN_CPP_DIR}/HeartbeatService_types.cpp
     ${GEN_CPP_DIR}/PaloInternalService_constants.cpp
     ${GEN_CPP_DIR}/PaloInternalService_types.cpp
+    ${GEN_CPP_DIR}/PaloExternalDataSourceService_constants.cpp
+    ${GEN_CPP_DIR}/PaloExternalDataSourceService_types.cpp
+    ${GEN_CPP_DIR}/TExtDataSourceService.cpp
     ${GEN_CPP_DIR}/FrontendService.cpp
     ${GEN_CPP_DIR}/FrontendService_constants.cpp
     ${GEN_CPP_DIR}/FrontendService_types.cpp
@@ -75,6 +81,13 @@ set(SRC_FILES
     ${GEN_CPP_DIR}/olap_common.pb.cc
     ${GEN_CPP_DIR}/olap_file.pb.cc
     ${GEN_CPP_DIR}/column_data_file.pb.cc
+    ${GEN_CPP_DIR}/data.pb.cc
+    ${GEN_CPP_DIR}/descriptors.pb.cc
+    ${GEN_CPP_DIR}/internal_service.pb.cc
+    ${GEN_CPP_DIR}/palo_internal_service.pb.cc
+    ${GEN_CPP_DIR}/types.pb.cc
+    ${GEN_CPP_DIR}/status.pb.cc
+    ${GEN_CPP_DIR}/segment_v2.pb.cc
     #$${GEN_CPP_DIR}/opcode/functions.cc
     #$${GEN_CPP_DIR}/opcode/vector-functions.cc
     #$${GEN_CPP_DIR}/opcode/opcode-registry-init.cc
@@ -82,12 +95,12 @@ set(SRC_FILES
 
 # keep everything in one library, the object files reference 
 # each other
-add_library(PaloGen STATIC ${SRC_FILES})
+add_library(DorisGen STATIC ${SRC_FILES})
 
 # Setting these files as code-generated lets make clean and incremental builds work
 # correctly
 set_source_files_properties(${SRC_FILES} PROPERTIES GENERATED TRUE)
 
-#add_dependencies(PaloGen thrift-cpp)
+#add_dependencies(DorisGen thrift-cpp)
 #add_dependencies(Opcode function)
 

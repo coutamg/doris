@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,17 +15,18 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_TOPN_NODE_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_TOPN_NODE_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_TOPN_NODE_H
+#define DORIS_BE_SRC_QUERY_EXEC_TOPN_NODE_H
 
 #include <boost/scoped_ptr.hpp>
 #include <queue>
 
 #include "exec/exec_node.h"
 #include "runtime/descriptors.h"
+#include "util/sort_heap.h"
 #include "util/tuple_row_compare.h"
 
-namespace palo {
+namespace doris {
 
 class MemPool;
 class RuntimeState;
@@ -43,14 +41,13 @@ public:
     TopNNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
     virtual ~TopNNode();
 
-    virtual Status init(const TPlanNode& tnode);
+    virtual Status init(const TPlanNode& tnode, RuntimeState* state = nullptr);
 
     virtual Status prepare(RuntimeState* state);
     virtual Status open(RuntimeState* state);
     virtual Status get_next(RuntimeState* state, RowBatch* row_batch, bool* eos);
     virtual Status close(RuntimeState* state);
-    virtual void push_down_predicate(
-        RuntimeState *state, std::list<ExprContext*> *expr_ctxs);
+    virtual void push_down_predicate(RuntimeState* state, std::list<ExprContext*>* expr_ctxs);
 
 protected:
     virtual void debug_string(int indentation_level, std::stringstream* out) const;
@@ -105,19 +102,13 @@ private:
     // Number of rows skipped. Used for adhering to _offset.
     int64_t _num_rows_skipped;
 
-    // The priority queue will never have more elements in it than the LIMIT.  The stl
-    // priority queue doesn't support a max size, so to get that functionality, the order
-    // of the queue is the opposite of what the ORDER BY clause specifies, such that the top
-    // of the queue is the last sorted element.
-    boost::scoped_ptr<
-        std::priority_queue<
-        Tuple*, std::vector<Tuple*>, TupleRowComparator> > _priority_queue;
+    // The priority queue will never have more elements in it than the LIMIT.      
+    std::unique_ptr<SortingHeap<Tuple*, std::vector<Tuple*>, TupleRowComparator>> _priority_queue;
 
     // END: Members that must be Reset()
     /////////////////////////////////////////
 };
 
-};
+}; // namespace doris
 
 #endif
-

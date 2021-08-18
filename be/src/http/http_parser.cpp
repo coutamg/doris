@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,24 +17,19 @@
 
 #include "http/http_parser.h"
 
-namespace palo {
+namespace doris {
 
 std::ostream& operator<<(std::ostream& os, const HttpChunkParseCtx& ctx) {
-    os << "HttpChunkParseCtx(" 
-        << "state=" << ctx.state
-        << "size=" << ctx.size
-        << "length=" << ctx.length
-        << ")";
+    os << "HttpChunkParseCtx("
+       << "state=" << ctx.state << "size=" << ctx.size << "length=" << ctx.length << ")";
     return os;
 }
 
 #define CR ((uint8_t)'\r')
 #define LF ((uint8_t)'\n')
 
-HttpParser::ParseState HttpParser::http_parse_chunked(
-        const uint8_t** buf,
-        const int64_t buf_len,
-        HttpChunkParseCtx* ctx) {
+HttpParser::ParseState HttpParser::http_parse_chunked(const uint8_t** buf, const int64_t buf_len,
+                                                      HttpChunkParseCtx* ctx) {
     enum ChunkParseState {
         SW_CHUNK_START = 0,
         SW_CHUNK_SIZE,
@@ -244,9 +237,9 @@ HttpParser::ParseState HttpParser::http_parse_chunked(
         ctx->length = 3 /* "0" LF LF */;
         break;
     case SW_CHUNK_SIZE:
-        ctx->length = 1 /* LF */
-            + (ctx->size ? ctx->size + 4 /* LF "0" LF LF */
-               : 1 /* LF */);
+        ctx->length = 1                            /* LF */
+                      + (ctx->size ? ctx->size + 4 /* LF "0" LF LF */
+                                   : 1 /* LF */);
         break;
     case SW_CHUNK_EXTENSION:
     case SW_CHUNK_EXTENSION_ALMOST_DONE:
@@ -276,4 +269,4 @@ HttpParser::ParseState HttpParser::http_parse_chunked(
     return rc;
 }
 
-}
+} // namespace doris

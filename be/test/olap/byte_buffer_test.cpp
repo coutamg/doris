@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,31 +15,34 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include "olap/byte_buffer.h"
+
+#include <filesystem>
 #include <gtest/gtest.h>
 #include <sys/mman.h>
 
-#include "olap/column_file/byte_buffer.h"
+#include "common/configbase.h"
 #include "olap/file_helper.h"
 #include "util/logging.h"
 
-namespace palo {
-namespace column_file {
+namespace doris {
 
 class TestByteBuffer : public testing::Test {
 public:
-    virtual ~TestByteBuffer() {
-    }
-    virtual void SetUp() {
-    }
+    virtual ~TestByteBuffer() {}
+    virtual void SetUp() {}
     virtual void TearDown() {
+        if (std::filesystem::exists(".test_byte_buffer")) {
+            ASSERT_TRUE(std::filesystem::remove_all(".test_byte_buffer"));
+        }
     }
 };
 
 // 测试基本的读写功能
 TEST_F(TestByteBuffer, TestReadWrite) {
-    ByteBuffer *buf1 = NULL;
+    StorageByteBuffer* buf1 = NULL;
 
-    buf1 = ByteBuffer::create(100);
+    buf1 = StorageByteBuffer::create(100);
     ASSERT_TRUE(buf1 != NULL);
 
     char in[10] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'};
@@ -83,7 +84,7 @@ TEST_F(TestByteBuffer, TestReadWrite) {
     ASSERT_EQ(0u, buf1->remaining());
     ASSERT_EQ(100u, buf1->position());
 
-    for (int i = 0; i < 50; i++){
+    for (int i = 0; i < 50; i++) {
         ASSERT_EQ(i, buf[i]);
     }
     char byte;
@@ -109,21 +110,21 @@ TEST_F(TestByteBuffer, TestReadWrite) {
 // 测试ByteBuffer对内存的引用, 尤其是智能指针的引用传递
 // 使用valgrind进行内存泄露检查
 TEST_F(TestByteBuffer, TestRef) {
-    ByteBuffer *buf1 = NULL;
+    StorageByteBuffer* buf1 = NULL;
 
-    buf1 = ByteBuffer::create(1000);
+    buf1 = StorageByteBuffer::create(1000);
     ASSERT_TRUE(buf1 != NULL);
 
     for (int i = 0; i < 256; i++) {
         ASSERT_EQ(OLAP_SUCCESS, buf1->put(i));
     }
-    ByteBuffer buf2 = *buf1;
+    StorageByteBuffer buf2 = *buf1;
     ASSERT_EQ(buf2.array(), buf1->array());
-    ByteBuffer buf4(*buf1);
+    StorageByteBuffer buf4(*buf1);
     ASSERT_EQ(buf2.array(), buf1->array());
 
-    ByteBuffer *buf3 = NULL;
-    buf3 = ByteBuffer::reference_buffer(buf1, 10, 90);
+    StorageByteBuffer* buf3 = NULL;
+    buf3 = StorageByteBuffer::reference_buffer(buf1, 10, 90);
 
     ASSERT_EQ(90u, buf3->capacity());
     ASSERT_EQ(90u, buf3->limit());
@@ -145,7 +146,7 @@ TEST_F(TestByteBuffer, TestRef) {
 TEST_F(TestByteBuffer, TestMmap) {
     FileHandler file_handle;
     std::string file_name = ".test_byte_buffer";
-    OLAPStatus res = file_handle.open_with_mode(file_name, O_CREAT | O_WRONLY ,S_IRUSR | S_IWUSR);
+    OLAPStatus res = file_handle.open_with_mode(file_name, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
     ASSERT_EQ(OLAP_SUCCESS, res);
 
     char buf[100];
@@ -157,8 +158,8 @@ TEST_F(TestByteBuffer, TestMmap) {
 
     res = file_handle.open(file_name, O_RDWR);
     ASSERT_EQ(OLAP_SUCCESS, res);
-    ByteBuffer * buf1 = ByteBuffer::mmap(NULL, 80, PROT_READ | PROT_WRITE, MAP_SHARED,
-                                         file_handle.fd(), 0);
+    StorageByteBuffer* buf1 = StorageByteBuffer::mmap(NULL, 80, PROT_READ | PROT_WRITE, MAP_SHARED,
+                                                      file_handle.fd(), 0);
     // mmap完成后就可以关闭原fd
     file_handle.close();
     ASSERT_TRUE(buf1 != NULL);
@@ -185,16 +186,15 @@ TEST_F(TestByteBuffer, TestMmap) {
     }
 }
 
-}
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
-    palo::init_glog("be-test");
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

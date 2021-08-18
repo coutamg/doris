@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,14 +15,27 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_NETWORK_UTIL_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_NETWORK_UTIL_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_NETWORK_UTIL_H
+#define DORIS_BE_SRC_COMMON_UTIL_NETWORK_UTIL_H
+
+#include <vector>
 
 #include "common/status.h"
 #include "gen_cpp/Types_types.h"
-#include <vector>
 
-namespace palo {
+namespace doris {
+
+//TODO: ipv6
+class InetAddress {
+public:
+    InetAddress(struct sockaddr* addr);
+    bool is_address_v4() const;
+    bool is_loopback_v4();
+    std::string get_host_address_v4();
+
+private:
+    struct sockaddr_in addr;
+};
 
 // Looks up all IP addresses associated with a given hostname. Returns
 // an error status if any system call failed, otherwise OK. Even if OK
@@ -40,11 +50,13 @@ bool find_first_non_localhost(const std::vector<std::string>& addresses, std::st
 // Returns OK if a hostname can be found, false otherwise.
 Status get_hostname(std::string* hostname);
 
-Status get_local_ip(std::string* local_ip);
+Status get_hosts_v4(std::vector<InetAddress>* hosts);
 
 // Utility method because Thrift does not supply useful constructors
 TNetworkAddress make_network_address(const std::string& hostname, int port);
 
-}
+Status get_inet_interfaces(std::vector<std::string>* interfaces, bool include_ipv6 = false);
+
+} // namespace doris
 
 #endif

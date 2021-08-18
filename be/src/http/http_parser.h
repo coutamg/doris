@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,19 +15,20 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_HTTP_PARSER_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_HTTP_PARSER_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_HTTP_PARSER_H
+#define DORIS_BE_SRC_COMMON_UTIL_HTTP_PARSER_H
 
 #include <stdint.h>
+
 #include <ostream>
 
-namespace palo {
+namespace doris {
 
 struct HttpChunkParseCtx {
-    int state;  // Parse state
-    int64_t size;   // Chunk size
-    int64_t length;   // minimal length need to read
-    HttpChunkParseCtx() : state(0), size(0), length(0) { }
+    int state;     // Parse state
+    size_t size;   // Chunk size
+    size_t length; // minimal length need to read
+    HttpChunkParseCtx() : state(0), size(0), length(0) {}
 };
 
 std::ostream& operator<<(std::ostream& os, const HttpChunkParseCtx& ctx);
@@ -37,10 +36,10 @@ std::ostream& operator<<(std::ostream& os, const HttpChunkParseCtx& ctx);
 class HttpParser {
 public:
     enum ParseState {
-        PARSE_OK,       // reach trunk data, you can read data
-        PARSE_AGAIN,    // continue call this function
-        PARSE_DONE,     // trunk is over
-        PARSE_ERROR,    // parse failed.
+        PARSE_OK,    // reach trunk data, you can read data
+        PARSE_AGAIN, // continue call this function
+        PARSE_DONE,  // trunk is over
+        PARSE_ERROR, // parse failed.
     };
 
     // Used to parse http Chunked Transfer Coding(rfc2616 3.6.1)
@@ -53,17 +52,16 @@ public:
     //
     // Returns:
     //  PARSE_OK        return this means we reach chunk-data, *buf point to begin of data
-    //                  size of chunk-data is saved in ctx->size. Caller need subtract size 
+    //                  size of chunk-data is saved in ctx->size. Caller need subtract size
     //                  consumed from ctx->size before next call of this function.
     //  PARSE_AGAIN     return this means that caller need to call this function with new data
     //                  from network
     //  PARSE_DONE      All of chunks readed
-    //  PARSE_ERROR     Error happend
-    static ParseState http_parse_chunked(const uint8_t** buf,
-                                         const int64_t buf_len,
+    //  PARSE_ERROR     Error happened
+    static ParseState http_parse_chunked(const uint8_t** buf, const int64_t buf_len,
                                          HttpChunkParseCtx* ctx);
 };
 
-}
+} // namespace doris
 
 #endif

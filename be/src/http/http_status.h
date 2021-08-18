@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_HTTP_STATUS_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_HTTP_STATUS_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_HTTP_STATUS_H
+#define DORIS_BE_SRC_COMMON_UTIL_HTTP_STATUS_H
 
 #include <string>
 
-namespace palo {
+namespace doris {
 
 enum HttpStatus {
     CONTINUE = 100,
@@ -69,8 +67,8 @@ enum HttpStatus {
 
 std::string to_code(const HttpStatus& status);
 
-std::string defalut_reason(const HttpStatus& status);
+std::string default_reason(const HttpStatus& status);
 
-}
+} // namespace doris
 
 #endif

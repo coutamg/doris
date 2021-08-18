@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,14 +15,17 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <iostream>
+#include "util/perf_counters.h"
+
 #include <gtest/gtest.h>
-#include "util/cpu-info.h"
-#include "util/disk-info.h"
-#include "util/mem-info.h"
-#include "util/perf-counters.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <iostream>
+
+#include "util/cpu_info.h"
+#include "util/disk_info.h"
+#include "util/mem_info.h"
 
 using namespace std;
 
@@ -40,16 +40,16 @@ TEST(PerfCounterTest, Basic) {
     double result = 0;
 
     for (int i = 0; i < 1000000; i++) {
-        double d1 = rand() / (double) RAND_MAX;
-        double d2 = rand() / (double) RAND_MAX;
+        double d1 = rand() / (double)RAND_MAX;
+        double d2 = rand() / (double)RAND_MAX;
         result = d1 * d1 + d2 * d2;
     }
 
     counters.Snapshot("After");
 
     for (int i = 0; i < 1000000; i++) {
-        double d1 = rand() / (double) RAND_MAX;
-        double d2 = rand() / (double) RAND_MAX;
+        double d1 = rand() / (double)RAND_MAX;
+        double d2 = rand() / (double)RAND_MAX;
         result = d1 * d1 + d2 * d2;
     }
 
@@ -63,17 +63,17 @@ TEST(CpuInfoTest, Basic) {
 
 TEST(DiskInfoTest, Basic) {
     cout << DiskInfo::DebugString();
-    cout << "Device name for disk 0: " << DiskInfo::device_name(0) << endl;
+    cout << "Device name for disk 0: " << DiskInfo::device_name(0) << std::endl;
 
     int disk_id_home_dir = DiskInfo::disk_id("/home");
-    cout << "Device name for '/home': " << DiskInfo::device_name(disk_id_home_dir) << endl;
+    cout << "Device name for '/home': " << DiskInfo::device_name(disk_id_home_dir) << std::endl;
 }
 
-}
+} // namespace impala
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
@@ -84,4 +84,3 @@ int main(int argc, char** argv) {
     impala::MemInfo::Init();
     return RUN_ALL_TESTS();
 }
-

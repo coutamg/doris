@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -22,10 +19,12 @@
 
 #include <gtest/gtest.h>
 
-namespace palo {
+#include "common/config.h"
+#include "util/logging.h"
 
-class PathTrieTest : public testing::Test {
-};
+namespace doris {
+
+class PathTrieTest : public testing::Test {};
 
 TEST_F(PathTrieTest, SplitTest) {
     PathTrie<int> root;
@@ -114,7 +113,7 @@ TEST_F(PathTrieTest, MultiTemplateTest) {
     std::string path = "/db/{table}";
     ASSERT_TRUE(root.insert(path, 100));
 
-    // Dumplicate template
+    // Duplicate template
     path = "/db/{rollup}/abc";
     ASSERT_FALSE(root.insert(path, 110));
 
@@ -134,7 +133,7 @@ TEST_F(PathTrieTest, MultiPlayTest) {
     std::string path = "/db/abc";
     ASSERT_TRUE(root.insert(path, 100));
 
-    // Dumplicate template
+    // Duplicate template
     path = "/db";
     ASSERT_TRUE(root.insert(path, 110));
 
@@ -155,7 +154,7 @@ TEST_F(PathTrieTest, EmptyTest) {
     std::string path = "/";
     ASSERT_TRUE(root.insert(path, 100));
 
-    // Dumplicate template
+    // Duplicate template
     path = "/";
     ASSERT_FALSE(root.insert(path, 110));
 
@@ -168,9 +167,15 @@ TEST_F(PathTrieTest, EmptyTest) {
     ASSERT_EQ(100, value);
 }
 
-}
+} // namespace doris
 
 int main(int argc, char* argv[]) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
+        fprintf(stderr, "error read config file. \n");
+        return -1;
+    }
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

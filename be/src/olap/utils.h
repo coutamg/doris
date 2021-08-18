@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,14 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_OLAP_UTILS_H
-#define BDG_PALO_BE_SRC_OLAP_UTILS_H
+#ifndef DORIS_BE_SRC_OLAP_UTILS_H
+#define DORIS_BE_SRC_OLAP_UTILS_H
 
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/time.h>
 #include <zlib.h>
 
+#include <filesystem>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -36,29 +35,22 @@
 #include <string>
 #include <vector>
 
-#include <boost/filesystem.hpp>
-
 #include "common/logging.h"
+#if defined(__i386) || defined(__x86_64__)
 #include "olap/bhp_lib.h"
+#endif
 #include "olap/olap_common.h"
 #include "olap/olap_define.h"
 
-namespace palo {
+#define TRY_LOCK true
+
+namespace doris {
 void write_log_info(char* buf, size_t buf_len, const char* fmt, ...);
+static const std::string DELETE_SIGN = "__DORIS_DELETE_SIGN__";
 
 // 用来加速运算
-const static int32_t g_power_table[] = {
-    1,
-    10,
-    100,
-    1000,
-    10000,
-    100000,
-    1000000,
-    10000000,
-    100000000,
-    1000000000
-};
+const static int32_t g_power_table[] = {1,      10,      100,      1000,      10000,
+                                        100000, 1000000, 10000000, 100000000, 1000000000};
 
 // 计时工具，用于确定一段代码执行的时间，用于性能调优
 class OlapStopWatch {
@@ -70,65 +62,23 @@ public:
                           (now.tv_usec - _begin_time.tv_usec));
     }
 
-    void reset() {
-        gettimeofday(&_begin_time, 0);
-    }
+    double get_elapse_second() { return get_elapse_time_us() / 1000000.0; }
 
-    OlapStopWatch() {
-        reset();
-    }
+    void reset() { gettimeofday(&_begin_time, 0); }
+
+    OlapStopWatch() { reset(); }
 
 private:
-    struct timeval _begin_time;    // 起始时间戳
+    struct timeval _begin_time; // 起始时间戳
 };
-
-// 解决notice log buffer不够长的问题, 原生的notice log的buffer只有2048大小
-class OLAPNoticeLog {
-public:
-    static void push(const char* key, const char* fmt, ...) \
-    __attribute__((__format__(__printf__, 2, 3)));
-
-    static void log(const char* msg);
-
-private:
-    static const int BUF_SIZE = 128 * 1024; // buffer大小
-    static __thread char _buf[BUF_SIZE];
-    static __thread int _len;
-};
-
-// 用于在notice log中输出索引定位次数以及平均定位时间
-// 如果还需要在notice log中输出需要聚合计算的其他信息，可以参考这个来实现。
-class OLAPNoticeInfo {
-public:
-    static void add_seek_count();
-    static void add_seek_time_us(uint64_t time_us);
-    static void add_scan_rows(uint64_t rows);
-    static void add_filter_rows(uint64_t rows);
-    static uint64_t seek_count();
-    static uint64_t seek_time_us();
-    static uint64_t avg_seek_time_us();
-    static uint64_t scan_rows();
-    static uint64_t filter_rows();
-    static void clear();
-
-private:
-    static __thread uint64_t _seek_count;
-    static __thread uint64_t _seek_time_us;
-    static __thread uint64_t _scan_rows;
-    static __thread uint64_t _filter_rows;
-};
-
-#define OLAP_LOG_NOTICE_SOCK(message) OLAPNoticeLog::log(message)
-#define OLAP_LOG_NOTICE_PUSH(key, fmt, arg...) OLAPNoticeLog::push(key, fmt, ##arg)
 
 // @brief 切分字符串
 // @param base 原串
 // @param separator 分隔符
 // @param result 切分结果
 template <typename T>
-OLAPStatus split_string(const std::string& base,
-                    const T separator,
-                    std::vector<std::string>* result) {
+OLAPStatus split_string(const std::string& base, const T separator,
+                        std::vector<std::string>* result) {
     if (!result) {
         return OLAP_ERR_OTHER_ERROR;
     }
@@ -157,7 +107,7 @@ OLAPStatus split_string(const std::string& base,
 
 template <typename T>
 void _destruct_object(const void* obj, void*) {
-    delete((const T*)obj);
+    delete ((const T*)obj);
 }
 
 template <typename T>
@@ -167,19 +117,11 @@ void _destruct_array(const void* array, void*) {
 
 // 根据压缩类型的不同，执行压缩。dest_buf_len是dest_buf的最大长度，
 // 通过指针返回的written_len是实际写入的长度。
-OLAPStatus olap_compress(const char* src_buf,
-                     size_t src_len,
-                     char* dest_buf,
-                     size_t dest_len,
-                     size_t* written_len,
-                     OLAPCompressionType compression_type);
+OLAPStatus olap_compress(const char* src_buf, size_t src_len, char* dest_buf, size_t dest_len,
+                         size_t* written_len, OLAPCompressionType compression_type);
 
-OLAPStatus olap_decompress(const char* src_buf,
-                       size_t src_len,
-                       char* dest_buf,
-                       size_t dest_len,
-                       size_t* written_len,
-                       OLAPCompressionType compression_type);
+OLAPStatus olap_decompress(const char* src_buf, size_t src_len, char* dest_buf, size_t dest_len,
+                           size_t* written_len, OLAPCompressionType compression_type);
 
 // 计算adler32的包装函数
 // 第一次使用的时候第一个参数传宏ADLER32_INIT, 之后的调用传上次计算的结果
@@ -195,142 +137,8 @@ OLAPStatus gen_timestamp_string(std::string* out_string);
 
 // 将file移到回收站，回收站位于storage_root/trash, file可以是文件或目录
 // 移动的同时将file改名：storage_root/trash/20150619154308/file
-OLAPStatus move_to_trash(const boost::filesystem::path& schema_hash_root,
-                         const boost::filesystem::path& file_path);
-
-// encapsulation of pthread_mutex to lock the critical sources.
-class MutexLock {
-public:
-    MutexLock();
-    ~MutexLock();
-
-    // wait until obtain the lock
-    OLAPStatus lock();
-    
-    // try obtaining the lock
-    OLAPStatus trylock();
-    
-    // unlock is called after lock()
-    OLAPStatus unlock();
-
-    pthread_mutex_t* getlock() {
-        return &_lock;
-    }
-
-private:
-    pthread_mutex_t _lock;
-};
-
-// encapsulation of pthread_mutex to lock the critical sources.
-class AutoMutexLock {
-public:
-    // wait until obtain the lock
-    explicit AutoMutexLock(MutexLock* mutex_lock) : _mutex_lock(mutex_lock) {
-        _mutex_lock->lock();
-    }
-    // unlock is called after
-    ~AutoMutexLock() {
-        _mutex_lock->unlock();
-    }
-
-private:
-    MutexLock* _mutex_lock;
-
-    DISALLOW_COPY_AND_ASSIGN(AutoMutexLock);
-};
-
-// encapsulation of pthread_mutex to lock the critical sources.
-class Condition {
-public:
-    explicit Condition(MutexLock& mutex);
-
-    ~Condition();
-
-    void wait();
-
-    void wait_for_seconds(uint32_t seconds);
-
-    void notify();
-
-    void notify_all();
-
-private:
-    MutexLock& _mutex;
-    pthread_cond_t _cond;
-};
-
-enum LockTypeEnum {
-    READER_LOCK = 0,
-    WRITER_LOCK = 1
-};
-
-// 监控读写锁的状态信息
-struct RWLockInfo {
-    // TODO(guping) 未来根据情况扩展信息字段，可以考虑文件名和代码行数
-    //const char* file_name;
-    //int32_t line_num;
-    RWLockInfo() : tid(0), lock_type(READER_LOCK) {}
-    RWLockInfo(pthread_t in_tid) : tid(in_tid), lock_type(READER_LOCK) {}
-    RWLockInfo(pthread_t in_tid, LockTypeEnum in_lock_type) :
-            tid(in_tid),
-            lock_type(in_lock_type) {}
-
-    void clear() {
-        tid = 0;
-        lock_type = READER_LOCK;
-    }
-
-    bool operator==(const RWLockInfo& other) const {
-        return tid == other.tid;
-    }
-
-    pthread_t tid;
-    LockTypeEnum lock_type;
-};
-
-// pthread_read/write_lock
-class RWLock {
-public:
-    RWLock();
-    ~RWLock();
-    // wait until obtaining the read lock
-    OLAPStatus rdlock();
-    // try obtaining the read lock
-    OLAPStatus tryrdlock();
-    // wait until obtaining the write lock
-    OLAPStatus wrlock();
-    // try obtaining the write lock
-    OLAPStatus trywrlock();
-    // unlock
-    OLAPStatus unlock();
-
-private:
-    pthread_rwlock_t _lock;
-};
-
-// encapsulation of pthread_rwlock_t to lock the critical sources.
-class AutoRWLock {
-public:
-    // wait until obtain the lock
-    explicit AutoRWLock(RWLock* lock, bool is_read)
-            : _lock(lock) {
-        if (is_read) {
-            _lock->rdlock();
-        } else {
-            _lock->wrlock();
-        }
-    }
-
-    // unlock is called after
-    ~AutoRWLock() {
-        _lock->unlock();
-    }
-
-private:
-    RWLock* _lock;
-
-    DISALLOW_COPY_AND_ASSIGN(AutoRWLock);
-};
+OLAPStatus move_to_trash(const std::filesystem::path& schema_hash_root,
+                         const std::filesystem::path& file_path);
 
 enum ComparatorEnum {
     COMPARATOR_LESS = 0,
@@ -352,16 +160,19 @@ class BinarySearchIterator : public std::iterator<std::random_access_iterator_ta
 public:
     BinarySearchIterator() : _offset(0u) {}
     explicit BinarySearchIterator(iterator_offset_t offset) : _offset(offset) {}
-    
-    iterator_offset_t operator*() const {
-        return _offset;
-    }
-    
+
+    iterator_offset_t operator*() const { return _offset; }
+
     BinarySearchIterator& operator++() {
         ++_offset;
         return *this;
     }
-    
+
+    BinarySearchIterator& operator--() {
+        --_offset;
+        return *this;
+    }
+
     BinarySearchIterator& operator-=(size_t step) {
         _offset = _offset - step;
         return *this;
@@ -371,13 +182,13 @@ public:
         _offset = _offset + step;
         return *this;
     }
-    
+
     bool operator!=(const BinarySearchIterator& iterator) {
         return this->_offset != iterator._offset;
     }
-    
+
 private:
-    iterator_offset_t  _offset;
+    iterator_offset_t _offset;
 };
 
 int operator-(const BinarySearchIterator& left, const BinarySearchIterator& right);
@@ -387,21 +198,14 @@ unsigned int crc32c_lut(char const* b, unsigned int off, unsigned int len, unsig
 
 OLAPStatus copy_file(const std::string& src, const std::string& dest);
 
-bool check_dir_existed(const std::string& path);
+OLAPStatus copy_dir(const std::string& src_dir, const std::string& dst_dir);
 
-OLAPStatus create_dir(const std::string& path);
-OLAPStatus create_dirs(const std::string& path);
+bool check_datapath_rw(const std::string& path);
 
-OLAPStatus copy_dir(const std::string &src_dir, const std::string &dst_dir);
-
-OLAPStatus remove_dir(const std::string& path);
-
-OLAPStatus remove_parent_dir(const std::string& path);
-
-OLAPStatus remove_all_dir(const std::string& path);
+OLAPStatus read_write_test_file(const std::string& test_file_path);
 
 //转换两个list
-template<typename T1, typename T2>
+template <typename T1, typename T2>
 void static_cast_assign_vector(std::vector<T1>* v1, const std::vector<T2>& v2) {
     if (NULL != v1) {
         //GCC3.4的模板展开貌似有问题， 这里如果使用迭代器会编译失败
@@ -424,24 +228,13 @@ private:
     static __thread char _buf[BUF_SIZE];
 };
 
-OLAPStatus dir_walk(const std::string& root, std::set<std::string>* dirs, std::set<std::string>* files);
-
 inline bool is_io_error(OLAPStatus status) {
-    return (((OLAP_ERR_IO_ERROR == status || OLAP_ERR_READ_UNENOUGH == status)&& errno == EIO)
-                || OLAP_ERR_CHECKSUM_ERROR == status
-                || OLAP_ERR_FILE_DATA_ERROR == status
-                || OLAP_ERR_TEST_FILE_ERROR == status
-                || OLAP_ERR_ROWBLOCK_READ_INFO_ERROR == status);
+    return (((OLAP_ERR_IO_ERROR == status || OLAP_ERR_READ_UNENOUGH == status) && errno == EIO) ||
+            OLAP_ERR_CHECKSUM_ERROR == status || OLAP_ERR_FILE_DATA_ERROR == status ||
+            OLAP_ERR_TEST_FILE_ERROR == status || OLAP_ERR_ROWBLOCK_READ_INFO_ERROR == status);
 }
 
-#define ENDSWITH(str, suffix)   \
-    ((str).rfind(suffix) == (str).size() - strlen(suffix))
-
-OLAPStatus remove_unused_files(const std::string& schema_hash_root,
-                           const std::set<std::string>& files,
-                           const std::string& header,
-                           const std::set<std::string>& indices,
-                           const std::set<std::string>& datas);
+#define ENDSWITH(str, suffix) ((str).rfind(suffix) == (str).size() - strlen(suffix))
 
 // 检查int8_t, int16_t, int32_t, int64_t的值是否溢出
 template <typename T>
@@ -450,10 +243,8 @@ bool valid_signed_number(const std::string& value_str) {
     errno = 0;
     int64_t value = strtol(value_str.c_str(), &endptr, 10);
 
-    if ((errno == ERANGE && (value == LONG_MAX || value == LONG_MIN))
-            || (errno != 0 && value == 0)
-            || endptr == value_str
-            || *endptr != '\0') {
+    if ((errno == ERANGE && (value == LONG_MAX || value == LONG_MIN)) ||
+        (errno != 0 && value == 0) || endptr == value_str || *endptr != '\0') {
         return false;
     }
 
@@ -478,10 +269,8 @@ bool valid_unsigned_number(const std::string& value_str) {
     errno = 0;
     uint64_t value = strtoul(value_str.c_str(), &endptr, 10);
 
-    if ((errno == ERANGE && (value == ULONG_MAX))
-            || (errno != 0 && value == 0)
-            || endptr == value_str
-            || *endptr != '\0') {
+    if ((errno == ERANGE && (value == ULONG_MAX)) || (errno != 0 && value == 0) ||
+        endptr == value_str || *endptr != '\0') {
         return false;
     }
 
@@ -497,57 +286,43 @@ bool valid_decimal(const std::string& value_str, const uint32_t precision, const
 // 粗略检查date或者datetime类型是否正确
 bool valid_datetime(const std::string& value_str);
 
-#define OLAP_LOG_WRITE(level, fmt, arg...) \
-    do { \
-        char buf[10240] = {0}; \
+bool valid_bool(const std::string& value_str);
+
+#define OLAP_LOG_WRITE(level, fmt, arg...)      \
+    do {                                        \
+        char buf[10240] = {0};                  \
         write_log_info(buf, 10240, fmt, ##arg); \
-        LOG(level) << buf; \
+        LOG(level) << buf;                      \
     } while (0)
 
-#define OLAP_VLOG_WRITE(level, fmt, arg...) \
-    do { \
-        if (OLAP_UNLIKELY(VLOG_IS_ON(level))) { \
-            char buf[10240] = {0}; \
+#define OLAP_VLOG_WRITE(level, fmt, arg...)         \
+    do {                                            \
+        if (OLAP_UNLIKELY(VLOG_IS_ON(level))) {     \
+            char buf[10240] = {0};                  \
             write_log_info(buf, 10240, fmt, ##arg); \
-            VLOG(level) << buf; \
-        } \
+            VLOG(level) << buf;                     \
+        }                                           \
     } while (0)
 
 // Log define for non-network usage
 // 屏蔽DEBUG和TRACE日志以满足性能测试需求
-#define OLAP_LOG_DEBUG(fmt, arg...)  OLAP_VLOG_WRITE(3, fmt, ##arg)
-#define OLAP_LOG_TRACE(fmt, arg...)  OLAP_VLOG_WRITE(20, fmt, ##arg)
-
-#define OLAP_LOG_INFO(fmt, arg...) OLAP_LOG_WRITE(INFO, fmt, ##arg)
 #define OLAP_LOG_WARNING(fmt, arg...) OLAP_LOG_WRITE(WARNING, fmt, ##arg)
-#define OLAP_LOG_FATAL(fmt, arg...) OLAP_LOG_WRITE(ERROR, fmt, ##arg)
-
-// Log define for network session
-#ifdef PERFORMANCE
-#define OLAP_LOG_DEBUG_SOCK(fmt, arg...)
-
-#else
-#define OLAP_LOG_DEBUG_SOCK(fmt, arg...) OLAP_LOG_WRITE(INFO, fmt, ##arg)
-
-#endif
-
-#define OLAP_LOG_TRACE_SOCK(fmt, arg...) OLAP_LOG_WRITE(INFO, fmt, ##arg)
 #define OLAP_LOG_NOTICE_DIRECT_SOCK(fmt, arg...) OLAP_LOG_WRITE(INFO, fmt, ##arg)
 #define OLAP_LOG_WARNING_SOCK(fmt, arg...) OLAP_LOG_WRITE(WARNING, fmt, ##arg)
-#define OLAP_LOG_FATAL_SOCK(fmt, arg...) OLAP_LOG_WRITE(ERROR, fmt, ##arg)
 #define OLAP_LOG_SETBASIC(type, fmt, arg...)
 
 // Util used to get string name of thrift enum item
-#define EnumToString(enum_type, index, out) \
-    do {\
-        std::map<int, const char*>::const_iterator it = _##enum_type##_VALUES_TO_NAMES.find(index);\
-        if (it == _##enum_type##_VALUES_TO_NAMES.end()) {\
-            out = "NULL";\
-        } else {\
-            out = it->second;\
-        }\
+#define EnumToString(enum_type, index, out)                 \
+    do {                                                    \
+        std::map<int, const char*>::const_iterator it =     \
+                _##enum_type##_VALUES_TO_NAMES.find(index); \
+        if (it == _##enum_type##_VALUES_TO_NAMES.end()) {   \
+            out = "NULL";                                   \
+        } else {                                            \
+            out = it->second;                               \
+        }                                                   \
     } while (0)
 
-}  // namespace palo
+} // namespace doris
 
-#endif // BDG_PALO_BE_SRC_OLAP_UTILS_H
+#endif // DORIS_BE_SRC_OLAP_UTILS_H

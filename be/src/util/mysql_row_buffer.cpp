@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,14 +17,15 @@
 
 #include "util/mysql_row_buffer.h"
 
+#include <fmt/format.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "common/logging.h"
-#include "util/mysql_dtoa.h"
+#include "gutil/strings/numbers.h"
 #include "util/mysql_global.h"
 
-namespace palo {
+namespace doris {
 
 // the first byte:
 // <= 250: length
@@ -58,15 +56,35 @@ static char* pack_vlen(char* packet, uint64_t length) {
     int8store(packet, length);
     return packet + 8;
 }
-MysqlRowBuffer::MysqlRowBuffer():
-    _pos(_default_buf),
-    _buf(_default_buf),
-    _buf_size(sizeof(_default_buf)) {
-}
+MysqlRowBuffer::MysqlRowBuffer()
+        : _pos(_default_buf),
+          _buf(_default_buf),
+          _buf_size(sizeof(_default_buf)),
+          _dynamic_mode(0),
+          _len_pos(nullptr) {}
 
 MysqlRowBuffer::~MysqlRowBuffer() {
     if (_buf != _default_buf) {
         delete[] _buf;
+    }
+}
+
+void MysqlRowBuffer::open_dynamic_mode() {
+    if (!_dynamic_mode) {
+        *_pos++ = 254;
+        // write length when dynamic mode close
+        _len_pos = _pos;
+        _pos = _pos + 8;
+    }
+    _dynamic_mode++;
+}
+
+void MysqlRowBuffer::close_dynamic_mode() {
+    _dynamic_mode--;
+
+    if (!_dynamic_mode) {
+        int8store(_len_pos, _pos - _len_pos - 8);
+        _len_pos = nullptr;
     }
 }
 
@@ -83,7 +101,7 @@ int MysqlRowBuffer::reserve(int size) {
     }
 
     int alloc_size = std::max(need_size, _buf_size * 2);
-    char* new_buf = new(std::nothrow) char[alloc_size];
+    char* new_buf = new (std::nothrow) char[alloc_size];
 
     if (NULL == new_buf) {
         LOG(ERROR) << "alloc memory failed. size = " << alloc_size;
@@ -103,24 +121,40 @@ int MysqlRowBuffer::reserve(int size) {
     return 0;
 }
 
+template <typename T>
+static char* add_int(T data, char* pos, bool dynamic_mode) {
+    auto fi = fmt::format_int(data);
+    int length = fi.size();
+    if (!dynamic_mode) {
+        int1store(pos++, length);
+    }
+    memcpy(pos, fi.data(), length);
+    return pos + length;
+}
+template <typename T>
+static char* add_float(T data, char* pos, bool dynamic_mode) {
+    int length = 0;
+    if constexpr (std::is_same_v<T, float>) {
+        length = FloatToBuffer(data, MAX_FLOAT_STR_LENGTH + 2, pos + !dynamic_mode);
+    } else if constexpr (std::is_same_v<T, double>) {
+        length = DoubleToBuffer(data, MAX_DOUBLE_STR_LENGTH + 2, pos + !dynamic_mode);
+    }
+    if (!dynamic_mode) {
+        int1store(pos++, length);
+    }
+    return pos + length;
+}
+
 int MysqlRowBuffer::push_tinyint(int8_t data) {
     // 1 for string trail, 1 for length, 1 for sign, other for digits
     int ret = reserve(3 + MAX_TINYINT_WIDTH);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
-    int length = snprintf(_pos + 1, MAX_TINYINT_WIDTH + 2, "%d", data);
-
-    if (length < 0) {
-        LOG(ERROR) << "snprintf failed. data = " << data;
-        return length;
-    }
-
-    int1store(_pos, length);
-    _pos += length + 1;
+    _pos = add_int(data, _pos, _dynamic_mode);
     return 0;
 }
 
@@ -129,19 +163,11 @@ int MysqlRowBuffer::push_smallint(int16_t data) {
     int ret = reserve(3 + MAX_SMALLINT_WIDTH);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
-    int length = snprintf(_pos + 1, MAX_SMALLINT_WIDTH + 2, "%d", data);
-
-    if (length < 0) {
-        LOG(ERROR) << "snprintf failed. data = " << data;
-        return length;
-    }
-
-    int1store(_pos, length);
-    _pos += length + 1;
+    _pos = add_int(data, _pos, _dynamic_mode);
     return 0;
 }
 
@@ -150,19 +176,11 @@ int MysqlRowBuffer::push_int(int32_t data) {
     int ret = reserve(3 + MAX_INT_WIDTH);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
-    int length = snprintf(_pos + 1, MAX_INT_WIDTH + 2, "%d", data);
-
-    if (length < 0) {
-        LOG(ERROR) << "snprintf failed. data = " << data;
-        return length;
-    }
-
-    int1store(_pos, length);
-    _pos += length + 1;
+    _pos = add_int(data, _pos, _dynamic_mode);
     return 0;
 }
 
@@ -171,19 +189,11 @@ int MysqlRowBuffer::push_bigint(int64_t data) {
     int ret = reserve(3 + MAX_BIGINT_WIDTH);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
-    int length = snprintf(_pos + 1, MAX_BIGINT_WIDTH + 2, "%ld", data);
-
-    if (length < 0) {
-        LOG(ERROR) << "snprintf failed. data = " << data;
-        return length;
-    }
-
-    int1store(_pos, length);
-    _pos += length + 1;
+    _pos = add_int(data, _pos, _dynamic_mode);
     return 0;
 }
 
@@ -196,15 +206,7 @@ int MysqlRowBuffer::push_unsigned_bigint(uint64_t data) {
         return ret;
     }
 
-    int length = snprintf(_pos + 1, MAX_BIGINT_WIDTH + 3, "%ld", data);
-
-    if (length < 0) {
-        LOG(ERROR) << "snprintf failed. data = " << data;
-        return length;
-    }
-
-    int1store(_pos, length);
-    _pos += length + 1;
+    _pos = add_int(data, _pos, _dynamic_mode);
     return 0;
 }
 
@@ -213,19 +215,11 @@ int MysqlRowBuffer::push_float(float data) {
     int ret = reserve(3 + MAX_FLOAT_STR_LENGTH);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
-    int length = my_gcvt(data, MY_GCVT_ARG_FLOAT, MAX_FLOAT_STR_LENGTH + 2, _pos + 1, NULL);
-
-    if (length < 0) {
-        LOG(ERROR) << "gcvt float failed. data = " << data;
-        return length;
-    }
-
-    int1store(_pos, length);
-    _pos += length + 1;
+    _pos = add_float(data, _pos, _dynamic_mode);
     return 0;
 }
 
@@ -234,19 +228,11 @@ int MysqlRowBuffer::push_double(double data) {
     int ret = reserve(3 + MAX_DOUBLE_STR_LENGTH);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
-    int length = my_gcvt(data, MY_GCVT_ARG_DOUBLE, MAX_DOUBLE_STR_LENGTH + 2, _pos + 1, NULL);
-
-    if (length < 0) {
-        LOG(ERROR) << "gcvt double failed. data = " << data;
-        return length;
-    }
-
-    int1store(_pos, length);
-    _pos += length + 1;
+    _pos = add_float(data, _pos, _dynamic_mode);
     return 0;
 }
 
@@ -260,21 +246,28 @@ int MysqlRowBuffer::push_string(const char* str, int length) {
     int ret = reserve(9 + length);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
-    _pos =  pack_vlen(_pos, length);
+    if (!_dynamic_mode) {
+        _pos = pack_vlen(_pos, length);
+    }
     memcpy(_pos, str, length);
     _pos += length;
     return 0;
 }
 
 int MysqlRowBuffer::push_null() {
+    if (_dynamic_mode) {
+        // dynamic mode not write
+        return 0;
+    }
+
     int ret = reserve(1);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return ret;
     }
 
@@ -287,7 +280,7 @@ char* MysqlRowBuffer::reserved(int size) {
     int ret = reserve(size);
 
     if (0 != ret) {
-        LOG(ERROR) << "mysql row buffer reserver failed.";
+        LOG(ERROR) << "mysql row buffer reserve failed.";
         return NULL;
     }
 
@@ -297,6 +290,4 @@ char* MysqlRowBuffer::reserved(int size) {
     return old_buf;
 }
 
-}
-
-/* vim: set ts=4 sw=4 sts=4 tw=100 */
+} // namespace doris

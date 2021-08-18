@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,24 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_LITERAL_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_LITERAL_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_LITERAL_H
+#define DORIS_BE_SRC_QUERY_EXPRS_LITERAL_H
 
+#include "binary_predicate.h"
+#include "common/object_pool.h"
 #include "exprs/expr.h"
 
-namespace palo {
+namespace doris {
 
 class TExprNode;
 
-class Literal : public Expr {
+class Literal final : public Expr {
 public:
     virtual ~Literal();
 
-    virtual Expr* clone(ObjectPool* pool) const override { 
-        return pool->add(new Literal(*this));
-    }
-
-    virtual Status get_codegend_compute_fn(RuntimeState* state, llvm::Function** fn);
+    virtual Expr* clone(ObjectPool* pool) const override { return pool->add(new Literal(*this)); }
 
     virtual BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
     virtual TinyIntVal get_tiny_int_val(ExprContext* context, TupleRow*);
@@ -45,18 +40,23 @@ public:
     virtual LargeIntVal get_large_int_val(ExprContext* context, TupleRow*);
     virtual FloatVal get_float_val(ExprContext* context, TupleRow*);
     virtual DoubleVal get_double_val(ExprContext* context, TupleRow*);
-    virtual DecimalVal get_decimal_val(ExprContext* context, TupleRow*);
+    virtual DecimalV2Val get_decimalv2_val(ExprContext* context, TupleRow*);
     virtual DateTimeVal get_datetime_val(ExprContext* context, TupleRow*);
     virtual StringVal get_string_val(ExprContext* context, TupleRow* row);
+    virtual CollectionVal get_array_val(ExprContext* context, TupleRow*);
+    // init val before use
+    virtual Status prepare(RuntimeState* state, const RowDescriptor& row_desc,
+                           ExprContext* context);
 
 protected:
     friend class Expr;
+    friend Expr* create_literal(ObjectPool* pool, PrimitiveType type, const void* data);
     Literal(const TExprNode& node);
 
 private:
     ExprValue _value;
 };
 
-}
+} // namespace doris
 
 #endif

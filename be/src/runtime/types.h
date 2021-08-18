@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,25 +15,21 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_TYPES_H
-#define BDG_PALO_BE_RUNTIME_TYPES_H
+#ifndef DORIS_BE_RUNTIME_TYPES_H
+#define DORIS_BE_RUNTIME_TYPES_H
 
 #include <string>
 #include <vector>
 
-#include "gen_cpp/Types_types.h"  // for TPrimitiveType
+#include "common/config.h"
+#include "gen_cpp/Types_types.h" // for TPrimitiveType
+#include "gen_cpp/types.pb.h"    // for PTypeDesc
+#include "olap/hll.h"
+#include "runtime/collection_value.h"
 #include "runtime/primitive_type.h"
 #include "thrift/protocol/TDebugProtocol.h"
-#include "common/config.h"
-#include "olap/field.h"
 
-namespace llvm {
-class ConstantStruct;
-}
-
-namespace palo {
-
-class LlvmCodeGen;
+namespace doris {
 
 // Describes a type. Includes the enum, children types, and any type-specific metadata
 // (e.g. precision and scale for decimals).
@@ -68,17 +61,13 @@ struct TypeDescriptor {
     /// Only set if type == TYPE_STRUCT. The field name of each child.
     std::vector<std::string> field_names;
 
-    TypeDescriptor() :
-            type(INVALID_TYPE), len(-1), precision(-1), scale(-1) {
-    }
+    TypeDescriptor() : type(INVALID_TYPE), len(-1), precision(-1), scale(-1) {}
 
     // explicit TypeDescriptor(PrimitiveType type) :
-    TypeDescriptor(PrimitiveType type) :
-            type(type), len(-1), precision(-1), scale(-1) {
+    TypeDescriptor(PrimitiveType type) : type(type), len(-1), precision(-1), scale(-1) {
 #if 0
         DCHECK_NE(type, TYPE_CHAR);
         DCHECK_NE(type, TYPE_VARCHAR);
-        DCHECK_NE(type, TYPE_DECIMAL);
         DCHECK_NE(type, TYPE_STRUCT);
         DCHECK_NE(type, TYPE_ARRAY);
         DCHECK_NE(type, TYPE_MAP);
@@ -110,13 +99,13 @@ struct TypeDescriptor {
         return ret;
     }
 
-    static TypeDescriptor create_decimal_type(int precision, int scale) {
+    static TypeDescriptor create_decimalv2_type(int precision, int scale) {
         DCHECK_LE(precision, MAX_PRECISION);
         DCHECK_LE(scale, MAX_SCALE);
         DCHECK_GE(precision, 0);
         DCHECK_LE(scale, precision);
         TypeDescriptor ret;
-        ret.type = TYPE_DECIMAL;
+        ret.type = TYPE_DECIMALV2;
         ret.precision = precision;
         ret.scale = scale;
         return ret;
@@ -126,6 +115,13 @@ struct TypeDescriptor {
         int idx = 0;
         TypeDescriptor result(t.types, &idx);
         DCHECK_EQ(idx, t.types.size() - 1);
+        return result;
+    }
+
+    static TypeDescriptor from_protobuf(const PTypeDesc& ptype) {
+        int idx = 0;
+        TypeDescriptor result(ptype.types(), &idx);
+        DCHECK_EQ(idx, ptype.types_size() - 1);
         return result;
     }
 
@@ -139,15 +135,13 @@ struct TypeDescriptor {
         if (type == TYPE_CHAR) {
             return len == o.len;
         }
-        if (type == TYPE_DECIMAL) {
+        if (type == TYPE_DECIMALV2) {
             return precision == o.precision && scale == o.scale;
         }
         return true;
     }
 
-    bool operator!=(const TypeDescriptor& other) const {
-        return !(*this == other);
-    }
+    bool operator!=(const TypeDescriptor& other) const { return !(*this == other); }
 
     TTypeDesc to_thrift() const {
         TTypeDesc thrift_type;
@@ -155,30 +149,25 @@ struct TypeDescriptor {
         return thrift_type;
     }
 
+    void to_protobuf(PTypeDesc* ptype) const;
+
     inline bool is_string_type() const {
-        return type == TYPE_VARCHAR || type == TYPE_CHAR || type == TYPE_HLL;
+        return type == TYPE_VARCHAR || type == TYPE_CHAR || type == TYPE_HLL || type == TYPE_OBJECT;
     }
 
-    inline bool is_date_type() const {
-        return type == TYPE_DATE || type == TYPE_DATETIME;
-    }
+    inline bool is_date_type() const { return type == TYPE_DATE || type == TYPE_DATETIME; }
 
-    inline bool is_decimal_type() const {
-        return type == TYPE_DECIMAL;
-    }
+    inline bool is_decimal_type() const { return (type == TYPE_DECIMALV2); }
 
     inline bool is_var_len_string_type() const {
-        return type == TYPE_VARCHAR || type == TYPE_HLL
-            || (type == TYPE_CHAR && len > MAX_CHAR_INLINE_LENGTH);
+        return type == TYPE_VARCHAR || type == TYPE_HLL || type == TYPE_CHAR || type == TYPE_OBJECT;
     }
 
     inline bool is_complex_type() const {
         return type == TYPE_STRUCT || type == TYPE_ARRAY || type == TYPE_MAP;
     }
 
-    inline bool is_collection_type() const {
-        return type == TYPE_ARRAY || type == TYPE_MAP;
-    }
+    inline bool is_collection_type() const { return type == TYPE_ARRAY || type == TYPE_MAP; }
 
     /// Returns the byte size of this type.  Returns 0 for variable length types.
     inline int get_byte_size() const {
@@ -187,6 +176,7 @@ struct TypeDescriptor {
         case TYPE_MAP:
         case TYPE_VARCHAR:
         case TYPE_HLL:
+        case TYPE_OBJECT:
             return 0;
 
         case TYPE_NULL:
@@ -208,10 +198,8 @@ struct TypeDescriptor {
         case TYPE_LARGEINT:
         case TYPE_DATETIME:
         case TYPE_DATE:
+        case TYPE_DECIMALV2:
             return 16;
-
-        case TYPE_DECIMAL:
-            return 40;
 
         case INVALID_TYPE:
         default:
@@ -226,6 +214,7 @@ struct TypeDescriptor {
         case TYPE_CHAR:
         case TYPE_VARCHAR:
         case TYPE_HLL:
+        case TYPE_OBJECT:
             return sizeof(StringValue);
 
         case TYPE_NULL:
@@ -242,6 +231,7 @@ struct TypeDescriptor {
 
         case TYPE_BIGINT:
         case TYPE_DOUBLE:
+        case TYPE_TIME:
             return 8;
 
         case TYPE_LARGEINT:
@@ -252,8 +242,11 @@ struct TypeDescriptor {
             // This is the size of the slot, the actual size of the data is 12.
             return sizeof(DateTimeValue);
 
-        case TYPE_DECIMAL:
-            return sizeof(DecimalValue);
+        case TYPE_DECIMALV2:
+            return 16;
+
+        case TYPE_ARRAY:
+            return sizeof(CollectionValue);
 
         case INVALID_TYPE:
         default:
@@ -274,10 +267,6 @@ struct TypeDescriptor {
         return 16;
     }
 
-    /// Returns the IR version of this ColumnType. Only implemented for scalar types. LLVM
-    /// optimizer can pull out fields of the returned ConstantStruct for constant folding.
-    llvm::ConstantStruct* to_ir(LlvmCodeGen* codegen) const;
-
     std::string debug_string() const;
 
 private:
@@ -287,16 +276,15 @@ private:
     /// 'types' being constructed, and is set to the index of the next type in 'types' that
     /// needs to be processed (or the size 'types' if all nodes have been processed).
     TypeDescriptor(const std::vector<TTypeNode>& types, int* idx);
+    TypeDescriptor(const google::protobuf::RepeatedPtrField<PTypeNode>& types, int* idx);
 
     /// Recursive implementation of ToThrift() that populates 'thrift_type' with the
     /// TTypeNodes for this type and its children.
     void to_thrift(TTypeDesc* thrift_type) const;
-
-    static const char* s_llvm_class_name;
 };
 
 std::ostream& operator<<(std::ostream& os, const TypeDescriptor& type);
 
-}
+} // namespace doris
 
 #endif

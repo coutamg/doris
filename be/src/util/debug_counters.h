@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,14 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_DEBUG_COUNTERS_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_DEBUG_COUNTERS_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_DEBUG_COUNTERS_H
+#define DORIS_BE_SRC_COMMON_UTIL_DEBUG_COUNTERS_H
 
 #include "util/runtime_profile.h"
 
 #define ENABLE_DEBUG_COUNTERS 1
 
-namespace palo {
+namespace doris {
 
 // Runtime counters have a two-phase lifecycle - creation and update. This is not
 // convenient for debugging where we would like to add and remove counters with a minimum
@@ -46,19 +43,16 @@ public:
 #if ENABLE_DEBUG_COUNTERS
 
 #define DEBUG_SCOPED_TIMER(counter_name) \
-  COUNTER_SCOPED_TIMER(DebugRuntimeProfile::profile().AddCounter(counter_name, \
-    TUnit::CPU_TICKS))
+    COUNTER_SCOPED_TIMER(DebugRuntimeProfile::profile().AddCounter(counter_name, TUnit::CPU_TICKS))
 
 #define DEBUG_COUNTER_UPDATE(counter_name, v) \
-  COUNTER_UPDATE(DebugRuntimeProfile::profile().AddCounter(counter_name, \
-    TUnit::UNIT), v)
+    COUNTER_UPDATE(DebugRuntimeProfile::profile().AddCounter(counter_name, TUnit::UNIT), v)
 
 #define DEBUG_COUNTER_SET(counter_name, v) \
-  COUNTER_SET(DebugRuntimeProfile::profile().AddCounter(counter_name, \
-    TUnit::UNIT), v)
+    COUNTER_SET(DebugRuntimeProfile::profile().AddCounter(counter_name, TUnit::UNIT), v)
 
 #define PRETTY_PRINT_DEBUG_COUNTERS(ostream_ptr) \
-  DebugRuntimeProfile::profile().PrettyPrint(ostream_ptr)
+    DebugRuntimeProfile::profile().PrettyPrint(ostream_ptr)
 
 #else
 
@@ -69,6 +63,6 @@ public:
 
 #endif // ENABLE_DEBUG_COUNTERS
 
-}
+} // namespace doris
 
-#endif // BDG_PALO_BE_SRC_COMMON_UTIL_DEBUG_COUNTERS_H
+#endif // DORIS_BE_SRC_COMMON_UTIL_DEBUG_COUNTERS_H

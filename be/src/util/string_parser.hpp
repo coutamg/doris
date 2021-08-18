@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_STRING_PARSER_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_STRING_PARSER_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_STRING_PARSER_H
+#define DORIS_BE_SRC_COMMON_UTIL_STRING_PARSER_H
 
 #include <cmath>
 #include <cstdint>
@@ -30,9 +27,10 @@
 #include <type_traits>
 
 #include "common/compiler_util.h"
+#include "common/status.h"
 #include "runtime/primitive_type.h"
 
-namespace palo {
+namespace doris {
 
 // Utility functions for doing atoi/atof on non-null terminated strings.  On micro benchmarks,
 // this is significantly faster than libc (atoi/strtol and atof/strtod).
@@ -72,6 +70,8 @@ public:
     template<typename T>
     static T numeric_limits(bool negative);
 
+    static inline __int128 get_scale_multiplier(int scale);
+
     // This is considerably faster than glibc's implementation (25x).
     // In the case of overflow, the max/min value for the data type will be returned.
     // Assumes s represents a decimal number.
@@ -84,6 +84,20 @@ public:
 
         int i = skip_leading_whitespace(s, len);
         return string_to_int_internal<T>(s + i, len - i, result);
+    }
+
+    // This is considerably faster than glibc's implementation.
+    // In the case of overflow, the max/min value for the data type will be returned.
+    // Assumes s represents a decimal number.
+    template <typename T>
+    static inline T string_to_unsigned_int(const char* s, int len, ParseResult* result) {
+        T ans = string_to_unsigned_int_internal<T>(s, len, result);
+        if (LIKELY(*result == PARSE_SUCCESS)){
+            return ans;
+        }
+
+        int i = skip_leading_whitespace(s, len);
+        return string_to_unsigned_int_internal<T>(s + i, len - i, result);
     }
 
     // Convert a string s representing a number in given base into a decimal number.
@@ -120,6 +134,37 @@ public:
         return string_to_bool_internal(s + i, len - i, result);
     }
 
+    static inline __int128 string_to_decimal(const char* s, int len,
+	    int type_precision, int type_scale, ParseResult* result);
+
+   
+    template <typename T>
+    static Status split_string_to_map(const std::string& base, const T element_separator,
+                                      const T key_value_separator, 
+                                      std::map<std::string, std::string>* result) {
+        int key_pos = 0;
+        int key_end;
+        int val_pos;
+        int val_end;
+    
+        while ((key_end = base.find(key_value_separator, key_pos)) != std::string::npos) {
+            if ((val_pos = base.find_first_not_of(key_value_separator, key_end)) 
+			          == std::string::npos) {
+                break;
+            }
+    	    if ((val_end = base.find(element_separator, val_pos)) == std::string::npos) {
+                val_end = base.size();
+            }
+            result->insert(std::make_pair(base.substr(key_pos, key_end - key_pos), 
+			                              base.substr(val_pos, val_end - val_pos)));
+            key_pos = val_end;
+            if (key_pos != std::string::npos) {
+          	    ++key_pos;
+            }
+        }
+    
+        return Status::OK();
+    }
 private:
     // This is considerably faster than glibc's implementation.
     // In the case of overflow, the max/min value for the data type will be returned.
@@ -127,6 +172,13 @@ private:
     // Return PARSE_FAILURE on leading whitespace. Trailing whitespace is allowed.
     template <typename T>
     static inline T string_to_int_internal(const char* s, int len, ParseResult* result);
+
+    // This is considerably faster than glibc's implementation.
+    // In the case of overflow, the max/min value for the data type will be returned.
+    // Assumes s represents a decimal number.
+    // Return PARSE_FAILURE on leading whitespace. Trailing whitespace is allowed.
+    template <typename T>
+    static inline T string_to_unsigned_int_internal(const char* s, int len, ParseResult* result);
 
     // Convert a string s representing a number in given base into a decimal number.
     // Return PARSE_FAILURE on leading whitespace. Trailing whitespace is allowed.
@@ -233,6 +285,53 @@ inline T StringParser::string_to_int_internal(const char* s, int len, ParseResul
     }
     *result = PARSE_SUCCESS;
     return static_cast<T>(negative ? -val : val);
+}
+
+template <typename T>
+inline T StringParser::string_to_unsigned_int_internal(const char* s, int len, ParseResult* result) {
+    if (UNLIKELY(len <= 0)) {
+        *result = PARSE_FAILURE;
+        return 0;
+    }
+
+    T val = 0;
+    T max_val = std::numeric_limits<T>::max();
+    int i = 0;
+
+    typedef typename std::make_signed<T>::type signedT;
+    // This is the fast path where the string cannot overflow.
+    if (LIKELY(len - i < StringParseTraits<signedT>::max_ascii_len())) {
+        val = string_to_int_no_overflow<T>(s + i, len - i, result);
+        return val;
+    }
+
+    const T max_div_10 = max_val / 10;
+    const T max_mod_10 = max_val % 10;
+
+    int first = i;
+    for (; i < len; ++i) {
+        if (LIKELY(s[i] >= '0' && s[i] <= '9')) {
+            T digit = s[i] - '0';
+            // This is a tricky check to see if adding this digit will cause an overflow.
+            if (UNLIKELY(val > (max_div_10 - (digit > max_mod_10)))) {
+                *result = PARSE_OVERFLOW;
+                return max_val;
+            }
+            val = val * 10 + digit;
+        } else {
+            if ((UNLIKELY(i == first || !is_all_whitespace(s + i, len - i)))) {
+                // Reject the string because either the first char was not a digit,
+                // or the remaining chars are not all whitespace
+                *result = PARSE_FAILURE;
+                return 0;
+            }
+            // Returning here is slightly faster than breaking the loop.
+            *result = PARSE_SUCCESS;
+            return val;
+        }
+    }
+    *result = PARSE_SUCCESS;
+    return val;
 }
 
 template <typename T>
@@ -498,6 +597,198 @@ inline int StringParser::StringParseTraits<__int128>::max_ascii_len() {
     return 39;
 }
 
-} // end namespace palo
+inline __int128 StringParser::get_scale_multiplier(int scale) {
+    DCHECK_GE(scale, 0);
+    static const __int128 values[] = {
+        static_cast<__int128>(1ll),
+        static_cast<__int128>(10ll),
+        static_cast<__int128>(100ll),
+        static_cast<__int128>(1000ll),
+        static_cast<__int128>(10000ll),
+        static_cast<__int128>(100000ll),
+        static_cast<__int128>(1000000ll),
+        static_cast<__int128>(10000000ll),
+        static_cast<__int128>(100000000ll),
+        static_cast<__int128>(1000000000ll),
+        static_cast<__int128>(10000000000ll),
+        static_cast<__int128>(100000000000ll),
+        static_cast<__int128>(1000000000000ll),
+        static_cast<__int128>(10000000000000ll),
+        static_cast<__int128>(100000000000000ll),
+        static_cast<__int128>(1000000000000000ll),
+        static_cast<__int128>(10000000000000000ll),
+        static_cast<__int128>(100000000000000000ll),
+        static_cast<__int128>(1000000000000000000ll),
+        static_cast<__int128>(1000000000000000000ll) * 10ll,
+        static_cast<__int128>(1000000000000000000ll) * 100ll,
+        static_cast<__int128>(1000000000000000000ll) * 1000ll,
+        static_cast<__int128>(1000000000000000000ll) * 10000ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000ll,
+        static_cast<__int128>(1000000000000000000ll) * 1000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 10000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 1000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 10000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 1000000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 10000000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 1000000000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 10000000000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000000000000000ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000000000000000ll * 10ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000000000000000ll * 100ll,
+        static_cast<__int128>(1000000000000000000ll) * 100000000000000000ll * 1000ll};
+    if (scale >= 0 && scale < 39) return values[scale];
+    return -1;  // Overflow
+}
 
-#endif // end of BDG_PALO_BE_SRC_COMMON_UTIL_STRING_PARSER_HPP
+inline __int128 StringParser::string_to_decimal(const char* s, int len,
+            int type_precision, int type_scale, ParseResult* result) {
+    // Special cases:
+    //   1) '' == Fail, an empty string fails to parse.
+    //   2) '   #   ' == #, leading and trailing white space is ignored.
+    //   3) '.' == 0, a single dot parses as zero (for consistency with other types).
+    //   4) '#.' == '#', a trailing dot is ignored.
+
+    // Ignore leading and trailing spaces.
+    while (len > 0 && is_whitespace(*s)) {
+        ++s;
+        --len;
+    }
+    while (len > 0 && is_whitespace(s[len - 1])) {
+        --len;
+    }
+
+    bool is_negative = false;
+    if (len > 0) {
+        switch (*s) {
+            case '-':
+                is_negative = true;
+            case '+':
+                ++s;
+                --len;
+        }
+    }
+
+    // Ignore leading zeros.
+    bool found_value = false;
+    while (len > 0 && UNLIKELY(*s == '0')) {
+        found_value = true;
+        ++s;
+        --len;
+    }
+
+    // Ignore leading zeros even after a dot. This allows for differentiating between
+    // cases like 0.01e2, which would fit in a DECIMAL(1, 0), and 0.10e2, which would
+    // overflow.
+    int scale = 0;
+    int found_dot = 0;
+    if (len > 0 && *s == '.') {
+        found_dot = 1;
+        ++s;
+        --len;
+        while (len > 0 && UNLIKELY(*s == '0')) {
+            found_value = true;
+            ++scale;
+            ++s;
+            --len;
+        }
+    }
+
+    int precision = 0;
+    bool found_exponent = false;
+    int8_t exponent = 0;
+    __int128 value = 0;
+    for (int i = 0; i < len; ++i) {
+        const char& c = s[i];
+        if (LIKELY('0' <= c && c <= '9')) {
+            found_value = true;
+            // Ignore digits once the type's precision limit is reached. This avoids
+            // overflowing the underlying storage while handling a string like
+            // 10000000000e-10 into a DECIMAL(1, 0). Adjustments for ignored digits and
+            // an exponent will be made later.
+            if (LIKELY(type_precision > precision)) {
+                value = (value * 10) + (c - '0');  // Benchmarks are faster with parenthesis...
+            }
+            DCHECK(value >= 0);  // For some reason //DCHECK_GE doesn't work with __int128.
+            ++precision;
+            scale += found_dot;
+        } else if (c == '.' && LIKELY(!found_dot)) {
+            found_dot = 1;
+        } else if ((c == 'e' || c == 'E') && LIKELY(!found_exponent)) {
+            found_exponent = true;
+            exponent = string_to_int_internal<int8_t>(s + i + 1, len - i - 1, result);
+            if (UNLIKELY(*result != StringParser::PARSE_SUCCESS)) {
+                if (*result == StringParser::PARSE_OVERFLOW && exponent < 0) {
+                    *result = StringParser::PARSE_UNDERFLOW;
+                }
+                return 0;
+            }
+            break;
+        } else {
+            if (value == 0) {
+                *result = StringParser::PARSE_FAILURE;
+                return 0;
+            }
+            *result = StringParser::PARSE_SUCCESS;
+            value *= get_scale_multiplier(type_scale - scale);
+            return is_negative ? -value : value;
+        }
+    }
+
+    // Find the number of truncated digits before adjusting the precision for an exponent.
+    int truncated_digit_count = precision - type_precision;
+    if (exponent > scale) {
+        // Ex: 0.1e3 (which at this point would have precision == 1 and scale == 1), the
+        //     scale must be set to 0 and the value set to 100 which means a precision of 3.
+        precision += exponent - scale;
+        value *= get_scale_multiplier(exponent - scale);
+        scale = 0;
+    } else {
+        // Ex: 100e-4, the scale must be set to 4 but no adjustment to the value is needed,
+        //     the precision must also be set to 4 but that will be done below for the
+        //     non-exponent case anyways.
+        scale -= exponent;
+    }
+    // Ex: 0.001, at this point would have precision 1 and scale 3 since leading zeros
+    //     were ignored during previous parsing.
+    if (scale > precision) precision = scale;
+
+    // Microbenchmarks show that beyond this point, returning on parse failure is slower
+    // than just letting the function run out.
+    *result = StringParser::PARSE_SUCCESS;
+    if (UNLIKELY(precision - scale > type_precision - type_scale)) {
+        *result = StringParser::PARSE_OVERFLOW;
+    } else if (UNLIKELY(scale > type_scale)) {
+        *result = StringParser::PARSE_UNDERFLOW;
+        int shift = scale - type_scale;
+        if (UNLIKELY(truncated_digit_count > 0)) shift -= truncated_digit_count;
+        if (shift > 0) {
+            __int128 divisor = get_scale_multiplier(shift);
+            if (LIKELY(divisor >= 0)) {
+                value /= divisor;
+                __int128 remainder = value % divisor;
+                if (abs(remainder) >= (divisor >> 1)) {
+                    value += 1;
+                }
+            } else {
+                DCHECK(divisor == -1); // //DCHECK_EQ doesn't work with __int128.
+                value = 0;
+            }
+        }
+        DCHECK(value >= 0); // //DCHECK_GE doesn't work with __int128.
+    } else if (UNLIKELY(!found_value && !found_dot)) {
+        *result = StringParser::PARSE_FAILURE;
+    }
+
+    if (type_scale > scale) {
+        value *= get_scale_multiplier(type_scale - scale);
+    }
+
+    return is_negative ? -value : value;
+}
+
+} // end namespace doris
+
+#endif // end of DORIS_BE_SRC_COMMON_UTIL_STRING_PARSER_HPP

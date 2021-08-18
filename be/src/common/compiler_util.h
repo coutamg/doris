@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,14 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_COMMON_COMPILER_UTIL_H
-#define BDG_PALO_BE_SRC_COMMON_COMMON_COMPILER_UTIL_H
+#ifndef DORIS_BE_SRC_COMMON_COMMON_COMPILER_UTIL_H
+#define DORIS_BE_SRC_COMMON_COMMON_COMPILER_UTIL_H
 
 // Compiler hint that this branch is likely or unlikely to
 // be taken. Take from the "What all programmers should know
 // about memory" paper.
 // example: if (LIKELY(size > 0)) { ... }
 // example: if (UNLIKELY(!status.ok())) { ... }
+#define CACHE_LINE_SIZE 64
+
 #ifdef LIKELY
 #undef LIKELY
 #endif
@@ -45,5 +44,6 @@
 /// decision, e.g. not inlining a small function on a hot path.
 #define ALWAYS_INLINE __attribute__((always_inline))
 
-#endif
+#define ALIGN_CACHE_LINE __attribute__((aligned(CACHE_LINE_SIZE)))
 
+#endif

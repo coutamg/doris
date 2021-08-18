@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,16 +15,17 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_UDF_UDF_DEBUG_H
-#define BDG_PALO_BE_UDF_UDF_DEBUG_H
+#ifndef DORIS_BE_UDF_UDF_DEBUG_H
+#define DORIS_BE_UDF_UDF_DEBUG_H
 
-#include <string>
 #include <sstream>
+#include <string>
+
 #include "udf/udf.h"
 
-namespace palo_udf {
+namespace doris_udf {
 
-template<typename T>
+template <typename T>
 std::string debug_string(const T& val) {
     if (val.is_null) {
         return "NULL";
@@ -38,7 +36,7 @@ std::string debug_string(const T& val) {
     return ss.str();
 }
 
-template<>
+template <>
 std::string debug_string(const StringVal& val) {
     if (val.is_null) {
         return "NULL";
@@ -47,7 +45,6 @@ std::string debug_string(const StringVal& val) {
     return std::string(reinterpret_cast<const char*>(val.ptr), val.len);
 }
 
-}
+} // namespace doris_udf
 
 #endif
-

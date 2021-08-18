@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,25 +15,29 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_AGENT_HEARTBEAT_SERVER_H
-#define BDG_PALO_BE_SRC_AGENT_HEARTBEAT_SERVER_H
+#ifndef DORIS_BE_SRC_AGENT_HEARTBEAT_SERVER_H
+#define DORIS_BE_SRC_AGENT_HEARTBEAT_SERVER_H
 
-#include "thrift/transport/TTransportUtils.h"
+#include <mutex>
+
 #include "agent/status.h"
 #include "gen_cpp/HeartbeatService.h"
 #include "gen_cpp/Status_types.h"
 #include "olap/olap_define.h"
-#include "olap/olap_rootpath.h"
 #include "runtime/exec_env.h"
+#include "thrift/transport/TTransportUtils.h"
 
-namespace palo {
+namespace doris {
 
 const uint32_t HEARTBEAT_INTERVAL = 10;
+class StorageEngine;
+class Status;
+class ThriftServer;
 
 class HeartbeatServer : public HeartbeatServiceIf {
 public:
     explicit HeartbeatServer(TMasterInfo* master_info);
-    virtual ~HeartbeatServer() {};
+    virtual ~HeartbeatServer(){};
 
     virtual void init_cluster_id();
 
@@ -47,18 +49,24 @@ public:
     // Output parameters:
     // * heartbeat_result: The result of heartbeat set
     virtual void heartbeat(THeartbeatResult& heartbeat_result, const TMasterInfo& master_info);
-private:
-    TMasterInfo* _master_info;
-    OLAPRootPath* _olap_rootpath_instance;
-    int64_t _epoch;
-    DISALLOW_COPY_AND_ASSIGN(HeartbeatServer);
-};  // class HeartBeatServer
 
-AgentStatus create_heartbeat_server(
-        ExecEnv* exec_env,
-        uint32_t heartbeat_server_port,
-        ThriftServer** heart_beat_server,
-        uint32_t worker_thread_num,
-        TMasterInfo* local_master_info);
-}  // namespace palo
-#endif  // BDG_PALO_BE_SRC_AGENT_HEARTBEAT_SERVER_H
+private:
+    Status _heartbeat(const TMasterInfo& master_info);
+
+    StorageEngine* _olap_engine;
+    int64_t _be_epoch;
+
+    // mutex to protect master_info and _epoch
+    std::mutex _hb_mtx;
+    // Not owned. Point to the ExecEnv::_master_info
+    TMasterInfo* _master_info;
+    int64_t _fe_epoch;
+
+    DISALLOW_COPY_AND_ASSIGN(HeartbeatServer);
+}; // class HeartBeatServer
+
+AgentStatus create_heartbeat_server(ExecEnv* exec_env, uint32_t heartbeat_server_port,
+                                    ThriftServer** heart_beat_server, uint32_t worker_thread_num,
+                                    TMasterInfo* local_master_info);
+} // namespace doris
+#endif // DORIS_BE_SRC_AGENT_HEARTBEAT_SERVER_H

@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,10 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_HTTP_HEADERS_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_HTTP_HEADERS_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_HTTP_HEADERS_H
+#define DORIS_BE_SRC_COMMON_UTIL_HTTP_HEADERS_H
 
-namespace palo {
+#include <string>
+
+namespace doris {
 
 class HttpHeaders {
 public:
@@ -97,8 +97,10 @@ public:
     static const char* WEBSOCKET_ORIGIN;
     static const char* WEBSOCKET_PROTOCOL;
     static const char* WWW_AUTHENTICATE;
+
+    static const std::string JsonType;
 };
 
-}
+} // namespace doris
 
 #endif

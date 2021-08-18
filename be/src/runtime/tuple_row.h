@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,27 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_TUPLE_ROW_H
-#define BDG_PALO_BE_RUNTIME_TUPLE_ROW_H
+#ifndef DORIS_BE_RUNTIME_TUPLE_ROW_H
+#define DORIS_BE_RUNTIME_TUPLE_ROW_H
 
 #include "runtime/descriptors.h"
 #include "runtime/mem_pool.h"
-#include "runtime/row_batch.h"
 #include "runtime/tuple.h"
 
-namespace palo {
+namespace doris {
 
 // A TupleRow encapsulates a contiguous sequence of Tuple pointers which
 // together make up a row.
 class TupleRow {
 public:
-    Tuple* get_tuple(int tuple_idx) {
-        return _tuples[tuple_idx];
-    }
+    Tuple* get_tuple(int tuple_idx) { return _tuples[tuple_idx]; }
 
-    void set_tuple(int tuple_idx, Tuple* tuple) {
-        _tuples[tuple_idx] = tuple;
-    }
+    void set_tuple(int tuple_idx, Tuple* tuple) { _tuples[tuple_idx] = tuple; }
 
     static TupleRow* create(const std::vector<TupleDescriptor*>& descs, MemPool* pool) {
         int size = descs.size() * sizeof(Tuple*);
@@ -60,7 +52,7 @@ public:
     // tuple memory and that memory will be reused.  Otherwise, new tuples will be allocated
     // and stored in 'dst'.
     void deep_copy(TupleRow* dst, const std::vector<TupleDescriptor*>& descs, MemPool* pool,
-                  bool reuse_tuple_mem) {
+                   bool reuse_tuple_mem) {
         for (int i = 0; i < descs.size(); ++i) {
             if (this->get_tuple(i) != NULL) {
                 if (reuse_tuple_mem && dst->get_tuple(i) != NULL) {
@@ -76,17 +68,16 @@ public:
         }
     }
 
-    TupleRow* dcopy_with_new(const std::vector<TupleDescriptor*>& descs, 
-                             MemPool* pool, int64_t* bytes) {
+    TupleRow* dcopy_with_new(const std::vector<TupleDescriptor*>& descs, MemPool* pool,
+                             int64_t* bytes) {
         int size = descs.size() * sizeof(Tuple*);
         TupleRow* result = reinterpret_cast<TupleRow*>(pool->allocate(size));
         *bytes = dcopy_with_new(result, descs, pool, false);
         return result;
     }
 
-    int64_t dcopy_with_new(
-            TupleRow* dst, const std::vector<TupleDescriptor*>& descs, 
-            MemPool* pool, bool reuse_tuple_mem) {
+    int64_t dcopy_with_new(TupleRow* dst, const std::vector<TupleDescriptor*>& descs, MemPool* pool,
+                           bool reuse_tuple_mem) {
         int64_t bytes = 0;
         for (int i = 0; i < descs.size(); ++i) {
             Tuple* old_tuple = dst->get_tuple(i);
@@ -115,14 +106,12 @@ public:
         return bytes;
     }
 
-    // TODO: make a macro for doing this
-    // For C++/IR interop, we need to be able to look up types by name.
-    static const char* _s_llvm_class_name;
+    std::string to_string(const RowDescriptor& d);
 
 private:
     Tuple* _tuples[1];
 };
 
-}
+} // namespace doris
 
 #endif

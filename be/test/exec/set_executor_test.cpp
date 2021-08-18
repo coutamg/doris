@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,30 +15,29 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include "exec/set_executor.h"
+
 #include <gtest/gtest.h>
 
 #include "common/logging.h"
-#include "exec/set_executor.h"
 #include "runtime/exec_env.h"
-#include "service/palo_server.h"
+#include "service/doris_server.h"
 
-namespace palo {
+namespace doris {
 
 class SetExecutorTest : public testing::Test {
 public:
-    SetExecutorTest() :
-        _runtim_state("tmp") {
-    }
+    SetExecutorTest() : _runtime_state("tmp") {}
 
-    virtual void SetUp() {
-    }
+    virtual void SetUp() {}
+
 private:
-    RuntimeState _runtim_state;
+    RuntimeState _runtime_state;
 };
 
 TEST_F(SetExecutorTest, normal_case) {
     ExecEnv exec_env;
-    PaloServer palo_server(&exec_env);
+    DorisServer doris_server(&exec_env);
     TSetParams params;
     {
         TSetVar set_var;
@@ -85,15 +81,15 @@ TEST_F(SetExecutorTest, normal_case) {
 
         params.set_vars.push_back(set_var);
     }
-    SetExecutor executor(&palo_server, params);
+    SetExecutor executor(&doris_server, params);
     RowDescriptor row_desc;
-    Status status = executor.prepare((RuntimeState*)&_runtim_state, row_desc);
+    Status status = executor.prepare((RuntimeState*)&_runtime_state, row_desc);
     ASSERT_TRUE(status.ok());
     LOG(INFO) << executor.debug_string();
 }
 TEST_F(SetExecutorTest, failed_case) {
     ExecEnv exec_env;
-    PaloServer palo_server(&exec_env);
+    DorisServer doris_server(&exec_env);
     TSetParams params;
     {
         TSetVar set_var;
@@ -108,23 +104,22 @@ TEST_F(SetExecutorTest, failed_case) {
 
         params.set_vars.push_back(set_var);
     }
-    SetExecutor executor(&palo_server, params);
+    SetExecutor executor(&doris_server, params);
     RowDescriptor row_desc;
-    Status status = executor.prepare((RuntimeState*)&_runtim_state, row_desc);
+    Status status = executor.prepare((RuntimeState*)&_runtime_state, row_desc);
     ASSERT_FALSE(status.ok());
     LOG(INFO) << executor.debug_string();
 }
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
     init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
-    palo::CpuInfo::Init();
+    doris::CpuInfo::Init();
     return RUN_ALL_TESTS();
 }
-

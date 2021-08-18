@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,15 +16,20 @@
 // under the License.
 
 #ifdef IR_COMPILE
-
 #include "exec/partitioned_hash_table.h"
 
-namespace palo {
+using namespace doris;
 
-uint32_t PartitionedHashTableCtx::get_hash_seed() const {
-    return _seeds[_level];
+uint32_t PartitionedHashTableCtx::GetHashSeed() const {
+    return seeds_[level_];
 }
 
-} // end namespace palo
+ExprContext* const* PartitionedHashTableCtx::build_expr_evals() const {
+    return build_expr_evals_.data();
+}
+
+ExprContext* const* PartitionedHashTableCtx::probe_expr_evals() const {
+    return probe_expr_evals_.data();
+}
 
 #endif

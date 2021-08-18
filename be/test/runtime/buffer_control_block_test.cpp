@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,23 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <pthread.h>
-#include <gtest/gtest.h>
 #include "runtime/buffer_control_block.h"
+
+#include <gtest/gtest.h>
+#include <pthread.h>
+
 #include "gen_cpp/PaloInternalService_types.h"
 
-namespace palo {
+namespace doris {
 
 class BufferControlBlockTest : public testing::Test {
 public:
-    BufferControlBlockTest() {
-    }
-    virtual ~BufferControlBlockTest() {
-    }
+    BufferControlBlockTest() {}
+    virtual ~BufferControlBlockTest() {}
 
 protected:
-    virtual void SetUp() {
-    }
+    virtual void SetUp() {}
 
 private:
 };
@@ -63,7 +59,7 @@ TEST_F(BufferControlBlockTest, get_one_after_close) {
     BufferControlBlock control_block(TUniqueId(), 1024);
     ASSERT_TRUE(control_block.init().ok());
 
-    control_block.close(Status::OK);
+    control_block.close(Status::OK());
     TFetchDataResult get_result;
     ASSERT_TRUE(control_block.get_batch(&get_result).ok());
     ASSERT_TRUE(get_result.eos);
@@ -165,7 +161,7 @@ TEST_F(BufferControlBlockTest, get_then_add) {
 void* close_thread(void* param) {
     BufferControlBlock* control_block = static_cast<BufferControlBlock*>(param);
     sleep(1);
-    control_block->close(Status::OK);
+    control_block->close(Status::OK());
     return NULL;
 }
 
@@ -185,10 +181,10 @@ TEST_F(BufferControlBlockTest, get_then_close) {
     pthread_join(id, NULL);
 }
 
-}
+} // namespace doris
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }

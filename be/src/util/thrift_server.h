@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,21 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_THRIFT_SERVER_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_THRIFT_SERVER_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_THRIFT_SERVER_H
+#define DORIS_BE_SRC_COMMON_UTIL_THRIFT_SERVER_H
 
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
+#include <thrift/TProcessor.h>
+#include <thrift/server/TServer.h>
+
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
-#include <boost/unordered_map.hpp>
-#include <thrift/server/TServer.h>
-#include <thrift/TProcessor.h>
+#include <boost/thread.hpp>
+#include <mutex>
+#include <unordered_map>
 
 #include "common/status.h"
 #include "util/metrics.h"
 
-namespace palo {
+namespace doris {
 // Utility class for all Thrift servers. Runs a TNonblockingServer(default) or a
 // TThreadPoolServer with, by default, 2 worker threads, that exposes the interface
 // described by a user-supplied TProcessor object.
@@ -70,20 +68,18 @@ public:
     //  - name: human-readable name of this server. Should not contain spaces
     //  - processor: Thrift processor to handle RPCs
     //  - port: The port the server will listen for connections on
-    //  - metrics: if not NULL, the server will register metrics on this object
     //  - num_worker_threads: the number of worker threads to use in any thread pool
     //  - server_type: the type of IO strategy this server should employ
     ThriftServer(const std::string& name,
                  const boost::shared_ptr<apache::thrift::TProcessor>& processor, int port,
-                 MetricGroup* metrics = NULL, int num_worker_threads = DEFAULT_WORKER_THREADS,
+                 int num_worker_threads = DEFAULT_WORKER_THREADS,
                  ServerType server_type = THREADED);
 
-    ~ThriftServer() { }
+    ~ThriftServer() {}
 
-    int port() const {
-        return _port;
-    }
+    int port() const { return _port; }
 
+    void stop();
     // Blocks until the server stops and exits its main thread.
     void join();
 
@@ -97,9 +93,7 @@ public:
     Status start();
 
     // Sets the session handler which receives events when sessions are created or closed.
-    void set_session_handler(SessionHandlerIf* session) {
-        _session_handler = session;
-    }
+    void set_session_handler(SessionHandlerIf* session) { _session_handler = session; }
 
     // Returns a unique identifier for the current session. A session is
     // identified with the lifetime of a socket connection to this server.
@@ -136,28 +130,25 @@ private:
     SessionHandlerIf* _session_handler;
 
     // Protects _session_keys
-    boost::mutex _session_keys_lock;
+    std::mutex _session_keys_lock;
 
     // Map of active session keys to shared_ptr containing that key; when a key is
     // removed it is automatically freed.
-    typedef boost::unordered_map<SessionKey*, boost::shared_ptr<SessionKey> > SessionKeySet;
+    typedef std::unordered_map<SessionKey*, boost::shared_ptr<SessionKey>> SessionKeySet;
     SessionKeySet _session_keys;
-
-    // True if metrics are enabled
-    bool _metrics_enabled;
-
-    // Number of currently active connections
-    IntGauge* _num_current_connections_metric;
-
-    // Total connections made over the lifetime of this server
-    IntCounter* _total_connections_metric;
 
     // Helper class which monitors starting servers. Needs access to internal members, and
     // is not used outside of this class.
     class ThriftServerEventProcessor;
     friend class ThriftServerEventProcessor;
+
+    std::shared_ptr<MetricEntity> _thrift_server_metric_entity;
+    // Number of currently active connections
+    IntGauge* thrift_current_connections;
+    // Total connections made over the lifetime of this server
+    IntCounter* thrift_connections_total;
 };
 
-}
+} // namespace doris
 
 #endif

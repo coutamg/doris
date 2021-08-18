@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,15 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_UTIL_LOAD_ERROR_HUB_H
-#define BDG_PALO_BE_SRC_UTIL_LOAD_ERROR_HUB_H
+#ifndef DORIS_BE_SRC_UTIL_LOAD_ERROR_HUB_H
+#define DORIS_BE_SRC_UTIL_LOAD_ERROR_HUB_H
 
 #include <memory>
 
 #include "common/status.h"
 
-namespace palo {
+namespace doris {
 
+class ExecEnv;
 class TLoadErrorHubInfo;
 
 class LoadErrorHub {
@@ -36,19 +34,16 @@ public:
         std::string msg;
         // enum ErrType type;
 
-        ErrorMsg(int64_t id, const std::string& message) :
-                job_id(id), msg(message) {
-        }
+        ErrorMsg(int64_t id, const std::string& message) : job_id(id), msg(message) {}
     };
 
-    LoadErrorHub() {
-    }
+    LoadErrorHub() {}
 
-    virtual ~LoadErrorHub() {
-    }
+    virtual ~LoadErrorHub() {}
 
-    static Status create_hub(const TLoadErrorHubInfo* t_hub_info,
-                           std::unique_ptr<LoadErrorHub>* hub);
+    static Status create_hub(ExecEnv* env, const TLoadErrorHubInfo* t_hub_info,
+                             const std::string& error_log_file_name,
+                             std::unique_ptr<LoadErrorHub>* hub);
 
     virtual Status prepare() = 0;
 
@@ -66,6 +61,6 @@ protected:
 
 }; // end class LoadErrorHub
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_UTIL_LOAD_ERROR_HUB_H
+#endif // DORIS_BE_SRC_UTIL_LOAD_ERROR_HUB_H

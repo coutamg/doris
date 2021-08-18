@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_MYSQL_TABLE_SINK_H
-#define BDG_PALO_BE_RUNTIME_MYSQL_TABLE_SINK_H
+#ifndef DORIS_BE_RUNTIME_MYSQL_TABLE_SINK_H
+#define DORIS_BE_RUNTIME_MYSQL_TABLE_SINK_H
 
 #include <vector>
 
@@ -26,7 +24,7 @@
 #include "exec/data_sink.h"
 #include "runtime/mysql_table_writer.h"
 
-namespace palo {
+namespace doris {
 
 class RowDescriptor;
 class TExpr;
@@ -39,8 +37,7 @@ class MemTracker;
 // This class is a sinker, which put input data to mysql table
 class MysqlTableSink : public DataSink {
 public:
-    MysqlTableSink(ObjectPool* pool, 
-                   const RowDescriptor& row_desc,
+    MysqlTableSink(ObjectPool* pool, const RowDescriptor& row_desc,
                    const std::vector<TExpr>& t_exprs);
 
     virtual ~MysqlTableSink();
@@ -59,9 +56,7 @@ public:
     // hosts. Further send() calls are illegal after calling close().
     virtual Status close(RuntimeState* state, Status exec_status);
 
-    virtual RuntimeProfile* profile() {
-        return _profile;
-    }
+    virtual RuntimeProfile* profile() { return _profile; }
 
 private:
     // owned by RuntimeState
@@ -75,9 +70,9 @@ private:
     MysqlTableWriter* _writer;
 
     RuntimeProfile* _profile;
-    std::unique_ptr<MemTracker> _mem_tracker;
+    std::shared_ptr<MemTracker> _mem_tracker;
 };
 
-}
+} // namespace doris
 
 #endif

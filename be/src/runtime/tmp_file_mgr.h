@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,16 +15,18 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_RUNTIME_TMP_FILE_MGR_H
-#define BDG_PALO_BE_SRC_QUERY_RUNTIME_TMP_FILE_MGR_H
+#ifndef DORIS_BE_SRC_QUERY_RUNTIME_TMP_FILE_MGR_H
+#define DORIS_BE_SRC_QUERY_RUNTIME_TMP_FILE_MGR_H
 
 #include "common/status.h"
-#include "gen_cpp/Types_types.h"  // for TUniqueId
-//#include "util/non_primitive_metrics.hpp"
-#include "util/collection_metrics.h"
+#include "gen_cpp/Types_types.h" // for TUniqueId
+// #include "util/collection_metrics.h"
+#include "util/metrics.h"
 #include "util/spinlock.h"
 
-namespace palo {
+namespace doris {
+
+class ExecEnv;
 
 // TmpFileMgr creates and manages temporary files and directories on the local
 // filesystem. It can manage multiple temporary directories across multiple devices.
@@ -47,14 +46,14 @@ public:
     // Creation of the file is deferred until the first call to AllocateSpace().
     class File {
     public:
-        ~File(){
+        ~File() {
             // do nothing
         }
 
         // Allocates 'write_size' bytes in this file for a new block of data.
         // The file size is increased by a call to truncate() if necessary.
         // The physical file is created on the first call to AllocateSpace().
-        // Returns Status::OK() and sets offset on success.
+        // Returns Status::OK()() and sets offset on success.
         // Returns an error status if an unexpected error occurs.
         // If an error status is returned, the caller can try a different temporary file.
         Status allocate_space(int64_t write_size, int64_t* offset);
@@ -69,15 +68,9 @@ public:
         // It is not valid to read or write to a file after calling Remove().
         Status remove();
 
-        const std::string& path() const {
-            return _path;
-        }
-        int disk_id() const {
-            return _disk_id;
-        }
-        bool is_blacklisted() const {
-            return _blacklisted;
-        }
+        const std::string& path() const { return _path; }
+        int disk_id() const { return _disk_id; }
+        bool is_blacklisted() const { return _blacklisted; }
 
     private:
         friend class TmpFileMgr;
@@ -114,23 +107,19 @@ public:
         bool _blacklisted;
     };
 
+    TmpFileMgr(ExecEnv* exec_env);
     TmpFileMgr();
 
-    ~TmpFileMgr(){
-        // do nothing.
-    }
+    ~TmpFileMgr();
 
     // Creates the configured tmp directories. If multiple directories are specified per
     // disk, only one is created and used. Must be called after DiskInfo::Init().
-    Status init(MetricGroup* metrics);
+    Status init();
 
     // Custom initialization - initializes with the provided list of directories.
     // If one_dir_per_device is true, only use one temporary directory per device.
     // This interface is intended for testing purposes.
-    Status init_custom(
-            const std::vector<std::string>& tmp_dirs,
-            bool one_dir_per_device,
-            MetricGroup* metrics);
+    Status init_custom(const std::vector<std::string>& tmp_dirs, bool one_dir_per_device);
 
     // Return a new File handle with a unique path for a query instance. The file path
     // is within the (single) tmp directory on the specified device id. The caller owns
@@ -153,9 +142,7 @@ private:
     // Dir stores information about a temporary directory.
     class Dir {
     public:
-        const std::string& path() const {
-            return _path;
-        }
+        const std::string& path() const { return _path; }
 
         // Return true if it was newly added to blacklist.
         bool blacklist() {
@@ -163,16 +150,13 @@ private:
             _blacklisted = true;
             return !was_blacklisted;
         }
-        bool is_blacklisted() const {
-            return _blacklisted;
-        }
+        bool is_blacklisted() const { return _blacklisted; }
 
     private:
         friend class TmpFileMgr;
 
         // path should be a absolute path to a writable scratch directory.
-        Dir(const std::string& path, bool blacklisted) :
-                _path(path), _blacklisted(blacklisted) {}
+        Dir(const std::string& path, bool blacklisted) : _path(path), _blacklisted(blacklisted) {}
 
         std::string _path;
 
@@ -185,7 +169,8 @@ private:
 
     bool is_blacklisted(DeviceId device_id);
 
-    bool _initialized;
+    ExecEnv* _exec_env;
+    bool _initialized = false;
 
     // Protects the status of tmp dirs (i.e. whether they're blacklisted).
     SpinLock _dir_status_lock;
@@ -193,11 +178,10 @@ private:
     // The created tmp directories.
     std::vector<Dir> _tmp_dirs;
 
-    // MetricGroup to track active scratch directories.
-    IntGauge* _num_active_scratch_dirs_metric;
-    SetMetric<std::string>* _active_scratch_dirs_metric;
+    // Metric to track active scratch directories.
+    IntGauge* active_scratch_dirs;
 };
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_QUERY_RUNTIME_TMP_FILE_MGR_H
+#endif // DORIS_BE_SRC_QUERY_RUNTIME_TMP_FILE_MGR_H

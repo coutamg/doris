@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -23,47 +20,48 @@
 #include <sstream>
 
 #include "exprs/anyval_util.h"
-#include "exprs/anyval_util.h"
-#include "codegen/llvm_codegen.h"
+#include "exprs/expr_context.h"
 #include "runtime/raw_value.h"
-#include "runtime/string_value.hpp"
 #include "runtime/runtime_state.h"
+#include "runtime/string_value.hpp"
 
-namespace palo {
+namespace doris {
 
-InPredicate::InPredicate(const TExprNode& node) : 
-        Predicate(node),
-    _is_not_in(node.in_predicate.is_not_in),
-    _is_prepare(false),
-    _null_in_set(false),
-    _hybird_set() {
-}
+InPredicate::InPredicate(const TExprNode& node)
+        : Predicate(node),
+          _is_not_in(node.in_predicate.is_not_in),
+          _is_prepare(false),
+          _null_in_set(false),
+          _hybrid_set() {}
 
-InPredicate::~InPredicate() {
-}
+InPredicate::~InPredicate() {}
 
-Status InPredicate::prepare(RuntimeState* state, const TypeDescriptor& type) {
+Status InPredicate::prepare(RuntimeState* state, HybridSetBase* hset) {
     if (_is_prepare) {
-        return Status::OK;
+        return Status::OK();
     }
-    _hybird_set.reset(HybirdSetBase::create_set(type.type));
-    if (NULL == _hybird_set.get()) {
-        return Status("Unknown column type.");
+    _hybrid_set.reset(hset);
+    if (NULL == _hybrid_set) {
+        return Status::InternalError("Unknown column type.");
     }
     _is_prepare = true;
 
-    return Status::OK;
+    return Status::OK();
 }
 
-Status InPredicate::open(
-        RuntimeState* state,
-        ExprContext* context,
-        FunctionContext::FunctionStateScope scope) {
+Status InPredicate::open(RuntimeState* state, ExprContext* context,
+                         FunctionContext::FunctionStateScope scope) {
     Expr::open(state, context, scope);
 
     for (int i = 1; i < _children.size(); ++i) {
-        if (_children[i]->type() != _children[0]->type()) {
-            return Status("InPredicate type not same");
+        if (_children[0]->type().is_string_type()) {
+            if (!_children[i]->type().is_string_type()) {
+                return Status::InternalError("InPredicate type not same");
+            }
+        } else {
+            if (_children[i]->type().type != _children[0]->type().type) {
+                return Status::InternalError("InPredicate type not same");
+            }
         }
 
         void* value = context->get_value(_children[i], NULL);
@@ -71,37 +69,37 @@ Status InPredicate::open(
             _null_in_set = true;
             continue;
         }
-        _hybird_set->insert(value);
+        _hybrid_set->insert(value);
     }
-    return Status::OK;
+    return Status::OK();
 }
 
-Status InPredicate::prepare(
-        RuntimeState* state, const RowDescriptor& row_desc, ExprContext* context) {
+Status InPredicate::prepare(RuntimeState* state, const RowDescriptor& row_desc,
+                            ExprContext* context) {
     for (int i = 0; i < _children.size(); ++i) {
         RETURN_IF_ERROR(_children[i]->prepare(state, row_desc, context));
     }
     if (_is_prepare) {
-        return Status::OK;
+        return Status::OK();
     }
     if (_children.size() < 1) {
-        return Status("no Function operator in.");
+        return Status::InternalError("no Function operator in.");
     }
-    _hybird_set.reset(HybirdSetBase::create_set(_children[0]->type().type));
-    if (NULL == _hybird_set.get()) {
-        return Status("Unknown column type.");
+    _hybrid_set.reset(HybridSetBase::create_set(_children[0]->type().type));
+    if (NULL == _hybrid_set.get()) {
+        return Status::InternalError("Unknown column type.");
     }
 
     _is_prepare = true;
 
-    return Status::OK;
+    return Status::OK();
 }
 
 void InPredicate::insert(void* value) {
     if (NULL == value) {
         _null_in_set = true;
     } else {
-        _hybird_set->insert(value);
+        _hybrid_set->insert(value);
     }
 }
 
@@ -126,14 +124,14 @@ BooleanVal InPredicate::get_boolean_val(ExprContext* ctx, TupleRow* row) {
     if (lhs_slot == NULL) {
         return BooleanVal::null();
     }
+    // if find in const set, return true
+    if (_hybrid_set->find(lhs_slot)) {
+        return BooleanVal(!_is_not_in);
+    }
     if (_null_in_set) {
         return BooleanVal::null();
-    }
-    // if find in const set, return true
-    if (_hybird_set->find(lhs_slot)) {
-        return BooleanVal(!_is_not_in);
     }
     return BooleanVal(_is_not_in);
 }
 
-}
+} // namespace doris

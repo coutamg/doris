@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,46 +17,49 @@
 
 #include "exec/broker_scanner.h"
 
-#include <string>
-#include <map>
-#include <vector>
-
 #include <gtest/gtest.h>
 
+#include <map>
+#include <string>
+#include <vector>
+
 #include "common/object_pool.h"
-#include "runtime/tuple.h"
 #include "exec/local_file_reader.h"
-#include "runtime/descriptors.h"
-#include "runtime/runtime_state.h"
-#include "runtime/lib_cache.h"
+#include "exprs/cast_functions.h"
 #include "gen_cpp/Descriptors_types.h"
 #include "gen_cpp/PlanNodes_types.h"
-#include "exprs/cast_functions.h"
+#include "runtime/descriptors.h"
+#include "runtime/mem_tracker.h"
+#include "runtime/runtime_state.h"
+#include "runtime/tuple.h"
+#include "runtime/user_function_cache.h"
 
-namespace palo {
+namespace doris {
 
 class BrokerScannerTest : public testing::Test {
 public:
-    BrokerScannerTest() : _runtime_state("BrokerScannerTest") {
+    BrokerScannerTest() : _tracker(new MemTracker()), _runtime_state(TQueryGlobals()) {
         init();
         _profile = _runtime_state.runtime_profile();
+        _runtime_state._instance_mem_tracker.reset(new MemTracker());
     }
     void init();
 
     static void SetUpTestCase() {
-        LibCache::instance()->init();
+        UserFunctionCache::instance()->init(
+                "./be/test/runtime/test_data/user_function_cache/normal");
         CastFunctions::init();
     }
 
 protected:
-    virtual void SetUp() {
-    }
-    virtual void TearDown() {
-    }
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+
 private:
     void init_desc_table();
     void init_params();
 
+    std::shared_ptr<MemTracker> _tracker;
     RuntimeState _runtime_state;
     RuntimeProfile* _profile;
     ObjectPool _obj_pool;
@@ -66,7 +67,8 @@ private:
     TBrokerScanRangeParams _params;
     DescriptorTbl* _desc_tbl;
     std::vector<TNetworkAddress> _addresses;
-    BrokerScanCounter _counter;
+    ScannerCounter _counter;
+    std::vector<doris::ExprContext*> _pre_filter; 
 };
 
 void BrokerScannerTest::init_desc_table() {
@@ -318,7 +320,7 @@ void BrokerScannerTest::init_params() {
         cast_expr.fn.has_var_args = false;
         cast_expr.fn.__set_signature("casttoint(VARCHAR(*))");
         cast_expr.fn.__isset.scalar_fn = true;
-        cast_expr.fn.scalar_fn.symbol = "palo::CastFunctions::cast_to_int_val";
+        cast_expr.fn.scalar_fn.symbol = "doris::CastFunctions::cast_to_int_val";
 
         TExprNode slot_ref;
         slot_ref.node_type = TExprNodeType::SLOT_REF;
@@ -356,11 +358,11 @@ TEST_F(BrokerScannerTest, normal) {
     range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // 1,2,3
@@ -408,11 +410,11 @@ TEST_F(BrokerScannerTest, normal2) {
     range.size = 4;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // 1,2,3
@@ -454,11 +456,11 @@ TEST_F(BrokerScannerTest, normal3) {
     range.size = 5;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // 1,2,3
@@ -501,11 +503,11 @@ TEST_F(BrokerScannerTest, normal4) {
     range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // 1,2,3
@@ -532,11 +534,11 @@ TEST_F(BrokerScannerTest, normal5) {
     range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // end of file
@@ -556,11 +558,11 @@ TEST_F(BrokerScannerTest, normal6) {
     range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // 4,5,6
@@ -587,11 +589,11 @@ TEST_F(BrokerScannerTest, normal7) {
     range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // end of file
@@ -611,11 +613,11 @@ TEST_F(BrokerScannerTest, normal8) {
     range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // 4,5,6
@@ -642,11 +644,11 @@ TEST_F(BrokerScannerTest, normal9) {
     range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
     ranges.push_back(range);
 
-    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, &_counter);
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
     auto st = scanner.open();
     ASSERT_TRUE(st.ok());
 
-    MemPool tuple_pool(_runtime_state.instance_mem_tracker());
+    MemPool tuple_pool(_tracker.get());
     Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
     bool eof = false;
     // end of file
@@ -655,15 +657,57 @@ TEST_F(BrokerScannerTest, normal9) {
     ASSERT_TRUE(eof);
 }
 
-} // end namespace palo
+TEST_F(BrokerScannerTest, multi_bytes_1) {
+    std::vector<TBrokerRangeDesc> ranges;
+    TBrokerRangeDesc range;
+    range.path = "./be/test/exec/test_data/broker_scanner/multi_bytes_sep.csv";
+    range.start_offset = 0;
+    range.size = 18;
+    range.splittable = true;
+    range.file_type = TFileType::FILE_LOCAL;
+    range.format_type = TFileFormatType::FORMAT_CSV_PLAIN;
+    ranges.push_back(range);
+
+    _params.column_separator_str = "AAAA";
+    _params.line_delimiter_str = "BB";
+    _params.column_separator_length = 4;
+    _params.line_delimiter_length = 2;
+    BrokerScanner scanner(&_runtime_state, _profile, _params, ranges, _addresses, _pre_filter, &_counter);
+    auto st = scanner.open();
+    ASSERT_TRUE(st.ok());
+
+    MemPool tuple_pool(_tracker.get());
+    Tuple* tuple = (Tuple*)tuple_pool.allocate(20);
+    bool eof = false;
+    // 4,5,6
+    st = scanner.get_next(tuple, &tuple_pool, &eof);
+    ASSERT_TRUE(st.ok());
+    ASSERT_FALSE(eof);
+    ASSERT_EQ(4, *(int*)tuple->get_slot(0));
+    ASSERT_EQ(5, *(int*)tuple->get_slot(4));
+    ASSERT_EQ(6, *(int*)tuple->get_slot(8));
+    // 1,2,3
+    st = scanner.get_next(tuple, &tuple_pool, &eof);
+    ASSERT_TRUE(st.ok());
+    ASSERT_FALSE(eof);
+    ASSERT_EQ(1, *(int*)tuple->get_slot(0));
+    ASSERT_EQ(2, *(int*)tuple->get_slot(4));
+    ASSERT_EQ(3, *(int*)tuple->get_slot(8));
+    // end of file
+    st = scanner.get_next(tuple, &tuple_pool, &eof);
+    ASSERT_TRUE(st.ok());
+    ASSERT_TRUE(eof);
+}
+
+} // end namespace doris
 
 int main(int argc, char** argv) {
-    // std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    // if (!palo::config::init(conffile.c_str(), false)) {
+    // std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    // if (!doris::config::init(conffile.c_str(), false)) {
     //     fprintf(stderr, "error read config file. \n");
     //     return -1;
     // }
-    // palo::init_glog("be-test");
+    // doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_PERF_COUNTERS_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_PERF_COUNTERS_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_PERF_COUNTERS_H
+#define DORIS_BE_SRC_COMMON_UTIL_PERF_COUNTERS_H
 
 #include <iostream>
 #include <string>
@@ -43,7 +40,7 @@
 //  counters.snapshot("After Work");
 //  counters.PrettyPrint(cout);
 
-namespace palo {
+namespace doris {
 
 class PerfCounters {
 public:
@@ -88,9 +85,7 @@ public:
     const std::vector<int64_t>* counters(int snapshot) const;
 
     // Returns readable names for the added counters
-    const std::vector<std::string>* counter_names() const {
-        return &_counter_names;
-    }
+    const std::vector<std::string>* counter_names() const { return &_counter_names; }
 
     // Prints out the names and results for all snapshots to 'out'
     void pretty_print(std::ostream* out) const;
@@ -136,12 +131,12 @@ private:
     std::vector<CounterData> _counters;
     std::vector<std::string> _counter_names;
     std::vector<std::string> _snapshot_names;
-    std::vector<std::vector<int64_t> > _snapshots;
+    std::vector<std::vector<int64_t>> _snapshots;
     // System perf counters can be grouped together.  The OS will update all grouped counters
     // at the same time.  This is useful to better correlate counter values.
     int _group_fd;
 };
 
-}
+} // namespace doris
 
 #endif

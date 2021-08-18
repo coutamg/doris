@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,13 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_UTIL_SPINLOCK_H
-#define BDG_PALO_BE_SRC_UTIL_SPINLOCK_H
+#ifndef DORIS_BE_SRC_UTIL_SPINLOCK_H
+#define DORIS_BE_SRC_UTIL_SPINLOCK_H
 
 #include "common/atomic.h"
 #include "common/logging.h"
 
-namespace palo {
+namespace doris {
 
 // Lightweight spinlock.
 class SpinLock {
@@ -41,23 +38,15 @@ public:
     }
 
     void unlock() {
-        // Memory barrier here. All updates before the unlock need to be made visible.
-        __sync_synchronize();
-        DCHECK(_locked);
-        _locked = false;
+        __sync_bool_compare_and_swap(&_locked, true, false);
     }
 
     // Tries to acquire the lock
-    inline bool try_lock() {
-        return __sync_bool_compare_and_swap(&_locked, false, true);
-    }
+    inline bool try_lock() { return __sync_bool_compare_and_swap(&_locked, false, true); }
 
-    void dcheck_locked() {
-        DCHECK(_locked);
-    }
+    void dcheck_locked() { DCHECK(_locked); }
 
 private:
-
     // Out-of-line definition of the actual spin loop. The primary goal is to have the
     // actual lock method as short as possible to avoid polluting the i-cache with
     // unnecessary instructions in the non-contested case.
@@ -81,6 +70,6 @@ private:
     bool _locked;
 };
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_UTIL_SPINLOCK_H
+#endif // DORIS_BE_SRC_UTIL_SPINLOCK_H

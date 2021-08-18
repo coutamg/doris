@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -21,17 +19,17 @@
 
 #include <stdint.h>
 
-#include <string>
 #include <map>
+#include <string>
 
 #include "common/status.h"
 #include "exec/file_reader.h"
-#include "gen_cpp/Types_types.h"
 #include "gen_cpp/PaloBrokerService_types.h"
+#include "gen_cpp/Types_types.h"
 
-namespace palo {
+namespace doris {
 
-class RuntimeState;
+class ExecEnv;
 class TBrokerRangeDesc;
 class TNetworkAddress;
 class RuntimeState;
@@ -39,21 +37,28 @@ class RuntimeState;
 // Reader of broker file
 class BrokerReader : public FileReader {
 public:
-    BrokerReader(RuntimeState* state,
-                 const std::vector<TNetworkAddress>& broker_addresses,
-                 const std::map<std::string, std::string>& properties,
-                 const std::string& path,
-                 int64_t start_offset);
+    // If the reader need the file size, set it when construct BrokerReader.
+    // There is no other way to set the file size.
+    BrokerReader(ExecEnv* env, const std::vector<TNetworkAddress>& broker_addresses,
+                 const std::map<std::string, std::string>& properties, const std::string& path,
+                 int64_t start_offset, int64_t file_size = 0);
     virtual ~BrokerReader();
 
-    Status open();
+    virtual Status open() override;
 
-    // Read 
-    virtual Status read(uint8_t* buf, size_t* buf_len, bool* eof) override;
-
+    // Read
+    virtual Status read(uint8_t* buf, int64_t buf_len, int64_t* bytes_read, bool* eof) override;
+    virtual Status readat(int64_t position, int64_t nbytes, int64_t* bytes_read,
+                          void* out) override;
+    virtual Status read_one_message(std::unique_ptr<uint8_t[]>* buf, int64_t* length) override;
+    virtual int64_t size() override;
+    virtual Status seek(int64_t position) override;
+    virtual Status tell(int64_t* position) override;
     virtual void close() override;
+    virtual bool closed() override;
+
 private:
-    RuntimeState* _state;
+    ExecEnv* _env;
     const std::vector<TNetworkAddress>& _addresses;
     const std::map<std::string, std::string>& _properties;
     const std::string& _path;
@@ -62,10 +67,9 @@ private:
 
     bool _is_fd_valid;
     TBrokerFD _fd;
-    bool _eof;
 
+    int64_t _file_size;
     int _addr_idx;
 };
 
-}
-
+} // namespace doris

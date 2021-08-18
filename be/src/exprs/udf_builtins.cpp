@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -22,21 +19,22 @@
 
 #include <ctype.h>
 #include <math.h>
+
 #include "common/logging.h"
 
-namespace palo {
-using palo_udf::FunctionContext;
-using palo_udf::BooleanVal;
-using palo_udf::TinyIntVal;
-using palo_udf::SmallIntVal;
-using palo_udf::IntVal;
-using palo_udf::BigIntVal;
-using palo_udf::LargeIntVal;
-using palo_udf::FloatVal;
-using palo_udf::DoubleVal;
-using palo_udf::DecimalVal;
-using palo_udf::StringVal;
-using palo_udf::AnyVal;
+namespace doris {
+using doris_udf::FunctionContext;
+using doris_udf::BooleanVal;
+using doris_udf::TinyIntVal;
+using doris_udf::SmallIntVal;
+using doris_udf::IntVal;
+using doris_udf::BigIntVal;
+using doris_udf::LargeIntVal;
+using doris_udf::FloatVal;
+using doris_udf::DoubleVal;
+using doris_udf::DecimalV2Val;
+using doris_udf::StringVal;
+using doris_udf::AnyVal;
 
 DoubleVal UdfBuiltins::abs(FunctionContext* context, const DoubleVal& v) {
     if (v.is_null) {
@@ -46,20 +44,18 @@ DoubleVal UdfBuiltins::abs(FunctionContext* context, const DoubleVal& v) {
     return DoubleVal(fabs(v.val));
 }
 
-DecimalVal UdfBuiltins::decimal_abs(FunctionContext* context, const DecimalVal& v) {
+DecimalV2Val UdfBuiltins::decimal_abs(FunctionContext* context, const DecimalV2Val& v) {
     if (v.is_null) {
         return v;
     }
-    DecimalVal result = v;
+    DecimalV2Val result = v;
     result.set_to_abs_value();
     return result;
 }
 
 //for test
-BigIntVal UdfBuiltins::add_two_number(
-        FunctionContext* context,
-        const BigIntVal& v1,
-        const BigIntVal& v2) {
+BigIntVal UdfBuiltins::add_two_number(FunctionContext* context, const BigIntVal& v1,
+                                      const BigIntVal& v2) {
     if (v1.is_null || v2.is_null) {
         return BigIntVal::null();
     }
@@ -68,17 +64,14 @@ BigIntVal UdfBuiltins::add_two_number(
 }
 
 //for test
-StringVal UdfBuiltins::sub_string(
-        FunctionContext* context,
-        const StringVal& v1,
-        const IntVal& begin,
-        const IntVal& len) {
+StringVal UdfBuiltins::sub_string(FunctionContext* context, const StringVal& v1,
+                                  const IntVal& begin, const IntVal& len) {
     if (v1.is_null || begin.is_null || len.is_null) {
         return StringVal::null();
     }
 
     int substring_len = (len.val > v1.len) ? v1.len : len.val;
-    StringVal  v = StringVal(context, substring_len);
+    StringVal v = StringVal(context, substring_len);
     memcpy(v.ptr, v1.ptr + begin.val, substring_len);
     return v;
 }
@@ -101,5 +94,4 @@ StringVal UdfBuiltins::lower(FunctionContext* context, const StringVal& v) {
     return result;
 }
 
-}
-
+} // namespace doris

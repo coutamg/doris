@@ -1,8 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
-// Licensed to the Apache Software Foundation (ASF) under one
-// or more contributor license agreements.  See the NOTICE file
-// distributed with this work for additional information
 // regarding copyright ownership.  The ASF licenses this file
 // to you under the Apache License, Version 2.0 (the
 // "License"); you may not use this file except in compliance
@@ -17,8 +12,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-namespace java com.baidu.palo.thrift
-namespace cpp palo
+namespace java org.apache.doris.thrift
+namespace cpp doris
 
 enum TBrokerOperationStatusCode {
     OK = 0;
@@ -72,6 +67,7 @@ struct TBrokerListResponse {
 struct TBrokerOpenReaderResponse {
     1: required TBrokerOperationStatus opStatus;
     2: optional TBrokerFD fd;
+    3: optional i64 size; // file size(Deprecated)
 }
 
 struct TBrokerReadResponse {
@@ -94,6 +90,7 @@ struct TBrokerListPathRequest {
     2: required string path;
     3: required bool isRecursive;
     4: required map<string,string> properties;
+    5: optional bool fileNameOnly;
 }
 
 struct TBrokerDeletePathRequest {

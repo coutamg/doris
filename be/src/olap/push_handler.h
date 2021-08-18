@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,149 +15,74 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_OLAP_PUSH_HANDLER_H
-#define BDG_PALO_BE_SRC_OLAP_PUSH_HANDLER_H
+#ifndef DORIS_BE_SRC_OLAP_PUSH_HANDLER_H
+#define DORIS_BE_SRC_OLAP_PUSH_HANDLER_H
 
 #include <map>
 #include <string>
 #include <vector>
 
+#include "exec/base_scanner.h"
 #include "gen_cpp/AgentService_types.h"
 #include "gen_cpp/MasterService_types.h"
+#include "gen_cpp/PaloInternalService_types.h"
 #include "olap/file_helper.h"
 #include "olap/merger.h"
 #include "olap/olap_common.h"
-#include "olap/olap_index.h"
 #include "olap/row_cursor.h"
-#include "olap/writer.h"
+#include "olap/rowset/rowset.h"
 
-namespace palo {
-
-typedef std::vector<IData*> DataSources;
-typedef std::vector<OLAPIndex*> Indices;
+namespace doris {
 
 class BinaryFile;
 class BinaryReader;
 class ColumnMapping;
 class RowCursor;
 
-struct TableVars {
-    SmartOLAPTable olap_table;
-    Versions unused_versions;
-    Indices unused_indices;
-    Indices added_indices;
+struct TabletVars {
+    TabletSharedPtr tablet;
+    RowsetSharedPtr rowset_to_add;
 };
 
 class PushHandler {
 public:
     typedef std::vector<ColumnMapping> SchemaMapping;
 
-    PushHandler() : _header_locked(false) {}
+    PushHandler() {}
     ~PushHandler() {}
 
     // Load local data file into specified tablet.
-    OLAPStatus process(
-            SmartOLAPTable olap_table,
-            const TPushReq& request,
-            PushType push_type,
-            std::vector<TTabletInfo>* tablet_info_vec);
+    OLAPStatus process_streaming_ingestion(TabletSharedPtr tablet, const TPushReq& request,
+                                           PushType push_type,
+                                           std::vector<TTabletInfo>* tablet_info_vec);
+
+    int64_t write_bytes() const { return _write_bytes; }
+    int64_t write_rows() const { return _write_rows; }
 
 private:
-    // Validate request, mainly data version check.
-    OLAPStatus _validate_request(
-            SmartOLAPTable olap_table_for_raw,
-            SmartOLAPTable olap_table_for_schema_change,
-            bool is_rollup_new_table,
-            PushType push_type);
-
-    // The latest version can be reverted for following scene:
-    // user submit a push job and cancel it soon, but some 
-    // tablets already push success.
-    OLAPStatus _get_versions_reverted(
-            SmartOLAPTable olap_table,
-            bool is_schema_change_tablet,
-            PushType push_type,
-            Versions* unused_versions);
-
+    OLAPStatus _convert_v2(TabletSharedPtr cur_tablet, TabletSharedPtr new_tablet_vec,
+                           RowsetSharedPtr* cur_rowset, RowsetSharedPtr* new_rowset);
     // Convert local data file to internal formatted delta,
-    // return new delta's OLAPIndex
-    OLAPStatus _convert(
-            SmartOLAPTable curr_olap_table,
-            SmartOLAPTable new_olap_table_vec,
-            Indices* curr_olap_indices,
-            Indices* new_olap_indices,
-            AlterTabletType alter_table_type);
-
-    // Update header info when new version add or dirty version removed.
-    OLAPStatus _update_header(
-            SmartOLAPTable olap_table,
-            Versions* unused_versions,
-            Indices* new_indices,
-            Indices* unused_indices);
-
-    // remove all old file of cumulatives versions
-    void _delete_old_indices(Indices* indices);
-
-    // Clear schema change information.
-    OLAPStatus _clear_alter_table_info(
-            SmartOLAPTable olap_table,
-            SmartOLAPTable related_olap_table);
+    // return new delta's SegmentGroup
+    OLAPStatus _convert(TabletSharedPtr cur_tablet, TabletSharedPtr new_tablet_vec,
+                        RowsetSharedPtr* cur_rowset, RowsetSharedPtr* new_rowset);
 
     // Only for debug
     std::string _debug_version_list(const Versions& versions) const;
 
-    // Lock tablet header before read header info.
-    void _obtain_header_rdlock() {
-        for (std::list<SmartOLAPTable>::iterator it = _olap_table_arr.begin();
-                it != _olap_table_arr.end(); ++it) {
-            OLAP_LOG_DEBUG("obtain all header locks rd. [table='%s']",
-                           (*it)->full_name().c_str());
-            (*it)->obtain_header_rdlock();
-        }
+    void _get_tablet_infos(const std::vector<TabletVars>& tablet_infos,
+                           std::vector<TTabletInfo>* tablet_info_vec);
 
-        _header_locked = true;
-    }
+    OLAPStatus _do_streaming_ingestion(TabletSharedPtr tablet, const TPushReq& request,
+                                       PushType push_type, vector<TabletVars>* tablet_vars,
+                                       std::vector<TTabletInfo>* tablet_info_vec);
 
-    // Locak tablet header before write header info.
-    void _obtain_header_wrlock() {
-        for (std::list<SmartOLAPTable>::iterator it = _olap_table_arr.begin();
-                it != _olap_table_arr.end(); ++it) {
-            OLAP_LOG_DEBUG(
-                    "obtain all header locks wr. [table='%s']", (*it)->full_name().c_str());
-            (*it)->obtain_header_wrlock();
-        }
-
-        _header_locked = true;
-    }
-
-    // Release tablet header lock.
-    void _release_header_lock() {
-        if (_header_locked) {
-            for (std::list<SmartOLAPTable>::reverse_iterator it = _olap_table_arr.rbegin();
-                    it != _olap_table_arr.rend(); ++it) {
-                OLAP_LOG_DEBUG(
-                        "release all header locks. [table='%s']", (*it)->full_name().c_str());
-                (*it)->release_header_lock();
-            }
-
-            _header_locked = false;
-        }
-    }
-
-    void _get_tablet_infos(
-            const std::vector<TableVars>& table_infoes,
-            std::vector<TTabletInfo>* tablet_info_vec);
-
+private:
     // mainly tablet_id, version and delta file path
     TPushReq _request;
 
-    // maily contains specified tablet object
-    // contains related tables also if in schema change, tablet split or rollup
-    std::list<SmartOLAPTable> _olap_table_arr;
-
-    // lock tablet header before modify tabelt header
-    bool _header_locked;
-
+    int64_t _write_bytes = 0;
+    int64_t _write_rows = 0;
     DISALLOW_COPY_AND_ASSIGN(PushHandler);
 };
 
@@ -167,24 +90,14 @@ private:
 class BinaryFile : public FileHandlerWithBuf {
 public:
     BinaryFile() {}
-    virtual ~BinaryFile() {
-        close();
-    }
+    virtual ~BinaryFile() { close(); }
 
     OLAPStatus init(const char* path);
 
-    size_t header_size() const {
-        return _header.size();
-    }
-    size_t file_length() const {
-        return _header.file_length();
-    }
-    uint32_t checksum() const {
-        return _header.checksum();
-    }
-    SchemaHash schema_hash() const {
-        return _header.message().schema_hash();
-    }
+    size_t header_size() const { return _header.size(); }
+    size_t file_length() const { return _header.file_length(); }
+    uint32_t checksum() const { return _header.checksum(); }
+    SchemaHash schema_hash() const { return _header.message().schema_hash(); }
 
 private:
     FileHeader<OLAPRawDeltaHeaderMessage, int32_t, FileHandlerWithBuf> _header;
@@ -197,7 +110,7 @@ public:
     static IBinaryReader* create(bool need_decompress);
     virtual ~IBinaryReader() {}
 
-    virtual OLAPStatus init(SmartOLAPTable table, BinaryFile* file) = 0;
+    virtual OLAPStatus init(TabletSharedPtr tablet, BinaryFile* file) = 0;
     virtual OLAPStatus finalize() = 0;
 
     virtual OLAPStatus next(RowCursor* row) = 0;
@@ -205,21 +118,18 @@ public:
     virtual bool eof() = 0;
 
     // call this function after finalize()
-    bool validate_checksum() {
-        return _adler_checksum == _file->checksum();
-    }
+    bool validate_checksum() { return _adler_checksum == _file->checksum(); }
 
 protected:
     IBinaryReader()
-        : _file(NULL),
-          _content_len(0),
-          _curr(0),
-          _adler_checksum(ADLER32_INIT),
-          _ready(false) {
-    }
+            : _file(NULL),
+              _content_len(0),
+              _curr(0),
+              _adler_checksum(ADLER32_INIT),
+              _ready(false) {}
 
     BinaryFile* _file;
-    SmartOLAPTable _table;
+    TabletSharedPtr _tablet;
     size_t _content_len;
     size_t _curr;
     uint32_t _adler_checksum;
@@ -227,42 +137,34 @@ protected:
 };
 
 // input file reader for Protobuffer format
-class BinaryReader: public IBinaryReader {
+class BinaryReader : public IBinaryReader {
 public:
     explicit BinaryReader();
-    virtual ~BinaryReader() {
-        finalize();
-    }
+    virtual ~BinaryReader() { finalize(); }
 
-    virtual OLAPStatus init(SmartOLAPTable table, BinaryFile* file);
+    virtual OLAPStatus init(TabletSharedPtr tablet, BinaryFile* file);
     virtual OLAPStatus finalize();
 
     virtual OLAPStatus next(RowCursor* row);
 
-    virtual bool eof() {
-        return _curr >= _content_len;
-    }
+    virtual bool eof() { return _curr >= _content_len; }
 
 private:
     char* _row_buf;
     size_t _row_buf_size;
 };
 
-class LzoBinaryReader: public IBinaryReader {
+class LzoBinaryReader : public IBinaryReader {
 public:
     explicit LzoBinaryReader();
-    virtual ~LzoBinaryReader() {
-        finalize();
-    }
+    virtual ~LzoBinaryReader() { finalize(); }
 
-    virtual OLAPStatus init(SmartOLAPTable table, BinaryFile* file);
+    virtual OLAPStatus init(TabletSharedPtr tablet, BinaryFile* file);
     virtual OLAPStatus finalize();
 
     virtual OLAPStatus next(RowCursor* row);
 
-    virtual bool eof() {
-        return _curr >= _content_len && _row_num == 0;
-    }
+    virtual bool eof() { return _curr >= _content_len && _row_num == 0; }
 
 private:
     OLAPStatus _next_block();
@@ -280,6 +182,39 @@ private:
     size_t _next_row_start;
 };
 
-}  // namespace palo
+class PushBrokerReader {
+public:
+    PushBrokerReader() : _ready(false), _eof(false) {}
+    ~PushBrokerReader() {}
 
-#endif // BDG_PALO_BE_SRC_OLAP_PUSH_HANDLER_H
+    OLAPStatus init(const Schema* schema, const TBrokerScanRange& t_scan_range,
+                    const TDescriptorTable& t_desc_tbl);
+    OLAPStatus next(ContiguousRow* row);
+    void print_profile();
+
+    OLAPStatus close() {
+        _ready = false;
+        return OLAP_SUCCESS;
+    }
+    bool eof() { return _eof; }
+    MemPool* mem_pool() { return _mem_pool.get(); }
+
+private:
+    bool _ready;
+    bool _eof;
+    TupleDescriptor* _tuple_desc;
+    Tuple* _tuple;
+    const Schema* _schema;
+    std::unique_ptr<RuntimeState> _runtime_state;
+    RuntimeProfile* _runtime_profile;
+    std::shared_ptr<MemTracker> _mem_tracker;
+    std::unique_ptr<MemPool> _mem_pool;
+    std::unique_ptr<ScannerCounter> _counter;
+    std::unique_ptr<BaseScanner> _scanner;
+    // Not used, just for placeholding
+    std::vector<ExprContext*> _pre_filter_ctxs;
+};
+
+} // namespace doris
+
+#endif // DORIS_BE_SRC_OLAP_PUSH_HANDLER_H

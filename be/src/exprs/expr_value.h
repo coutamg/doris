@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,16 +15,17 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_EXPR_VALUE_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_EXPR_VALUE_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_EXPR_VALUE_H
+#define DORIS_BE_SRC_QUERY_EXPRS_EXPR_VALUE_H
 
+#include "runtime/collection_value.h"
+#include "runtime/datetime_value.h"
+#include "runtime/decimalv2_value.h"
 #include "runtime/string_value.h"
 #include "runtime/string_value.hpp"
-#include "runtime/datetime_value.h"
-#include "runtime/decimal_value.h"
 #include "runtime/types.h"
 
-namespace palo {
+namespace doris {
 
 // The materialized value returned by Expr::get_value().
 // Some exprs may set multiple fields of this value at once
@@ -46,38 +44,38 @@ struct ExprValue {
     std::string string_data;
     StringValue string_val;
     DateTimeValue datetime_val;
-    DecimalValue decimal_val;
+    DecimalV2Value decimalv2_val;
+    CollectionValue array_val;
 
-    ExprValue() : 
-            bool_val(false),
-            tinyint_val(0),
-            smallint_val(0),
-            int_val(0),
-            bigint_val(0),
-            large_int_val(0),
-            float_val(0.0),
-            double_val(0.0),
-            string_data(),
-            string_val(NULL, 0),
-            datetime_val(),
-            decimal_val() {
-    }
+    ExprValue()
+            : bool_val(false),
+              tinyint_val(0),
+              smallint_val(0),
+              int_val(0),
+              bigint_val(0),
+              large_int_val(0),
+              float_val(0.0),
+              double_val(0.0),
+              string_data(),
+              string_val(NULL, 0),
+              datetime_val(),
+              decimalv2_val(0),
+              array_val() {}
 
-    ExprValue(bool v): bool_val(v) {}
-    ExprValue(int8_t v): tinyint_val(v) {}
-    ExprValue(int16_t v): smallint_val(v) {}
-    ExprValue(int32_t v): int_val(v) {}
-    ExprValue(int64_t v): bigint_val(v) {}
+    ExprValue(bool v) : bool_val(v) {}
+    ExprValue(int8_t v) : tinyint_val(v) {}
+    ExprValue(int16_t v) : smallint_val(v) {}
+    ExprValue(int32_t v) : int_val(v) {}
+    ExprValue(int64_t v) : bigint_val(v) {}
     ExprValue(__int128 value) : large_int_val(value) {}
-    ExprValue(float v): float_val(v) {}
-    ExprValue(double v): double_val(v) {}
-    ExprValue(int64_t i, int32_t f) : decimal_val(i, f) {}
+    ExprValue(float v) : float_val(v) {}
+    ExprValue(double v) : double_val(v) {}
+    ExprValue(int64_t i, int32_t f) : decimalv2_val(i, f) {}
 
     // c'tor for string values
-    ExprValue(const std::string& str) : 
-            string_data(str),
-            string_val(const_cast<char*>(string_data.data()), string_data.size()) {
-    }
+    ExprValue(const std::string& str)
+            : string_data(str),
+              string_val(const_cast<char*>(string_data.data()), string_data.size()) {}
 
     // Set string value to copy of str
     void set_string_val(const StringValue& str) {
@@ -136,9 +134,9 @@ struct ExprValue {
             double_val = 0;
             return &double_val;
 
-        case TYPE_DECIMAL:
-            decimal_val.set_to_zero();
-            return &decimal_val;
+        case TYPE_DECIMALV2:
+            decimalv2_val.set_to_zero();
+            return &decimalv2_val;
 
         default:
             DCHECK(false);
@@ -173,7 +171,7 @@ struct ExprValue {
             return &bigint_val;
 
         case TYPE_LARGEINT:
-            large_int_val = 0;
+            large_int_val = std::numeric_limits<int128_t>::min();
             return &large_int_val;
 
         case TYPE_FLOAT:
@@ -184,9 +182,9 @@ struct ExprValue {
             double_val = std::numeric_limits<double>::min();
             return &double_val;
 
-        case TYPE_DECIMAL:
-            decimal_val = DecimalValue::get_min_decimal();
-            return &decimal_val;
+        case TYPE_DECIMALV2:
+            decimalv2_val = DecimalV2Value::get_min_decimal();
+            return &decimalv2_val;
 
         default:
             DCHECK(false);
@@ -221,7 +219,7 @@ struct ExprValue {
             return &bigint_val;
 
         case TYPE_LARGEINT:
-            large_int_val = 0;
+            large_int_val = std::numeric_limits<int128_t>::max();
             return &large_int_val;
 
         case TYPE_FLOAT:
@@ -232,9 +230,9 @@ struct ExprValue {
             double_val = std::numeric_limits<double>::max();
             return &double_val;
 
-        case TYPE_DECIMAL:
-            decimal_val = DecimalValue::get_max_decimal();
-            return &decimal_val;
+        case TYPE_DECIMALV2:
+            decimalv2_val = DecimalV2Value::get_max_decimal();
+            return &decimalv2_val;
 
         default:
             DCHECK(false);
@@ -243,6 +241,6 @@ struct ExprValue {
     }
 };
 
-}
+} // namespace doris
 
 #endif

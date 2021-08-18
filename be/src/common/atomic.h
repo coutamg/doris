@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_ATOMIC_H
-#define BDG_PALO_BE_SRC_COMMON_ATOMIC_H
+#ifndef DORIS_BE_SRC_COMMON_ATOMIC_H
+#define DORIS_BE_SRC_COMMON_ATOMIC_H
 
 #include <algorithm>
 
@@ -27,7 +24,7 @@
 #include "gutil/atomicops.h"
 #include "gutil/macros.h"
 
-namespace palo {
+namespace doris {
 
 class AtomicUtil {
 public:
@@ -38,26 +35,26 @@ public:
     // should be:
     //  while (1) CpuWait();
     static ALWAYS_INLINE void cpu_wait() {
-        asm volatile("pause\n": : :"memory");
+#if (defined(__i386) || defined(__x86_64__))
+        asm volatile("pause\n" : : : "memory");
+#elif defined(__aarch64__)
+        asm volatile("yield\n" ::: "memory");
+#endif
     }
 
     /// Provides "barrier" semantics (see below) without a memory access.
-    static ALWAYS_INLINE void memory_barrier() {
-        __sync_synchronize();
-    }
+    static ALWAYS_INLINE void memory_barrier() { __sync_synchronize(); }
 
     /// Provides a compiler barrier. The compiler is not allowed to reorder memory
     /// accesses across this (but the CPU can).  This generates no instructions.
-    static ALWAYS_INLINE void compiler_barrier() {
-        __asm__ __volatile__("" : : : "memory");
-    }
+    static ALWAYS_INLINE void compiler_barrier() { __asm__ __volatile__("" : : : "memory"); }
 };
 
 // Wrapper for atomic integers.  This should be switched to c++ 11 when
 // we can switch.
 // This class overloads operators to behave like a regular integer type
 // but all operators and functions are thread safe.
-template<typename T>
+template <typename T>
 class AtomicInt {
 public:
     AtomicInt(T initial) : _value(initial) {}
@@ -92,7 +89,7 @@ public:
         return *this;
     }
 
-    // These define the preincrement (i.e. --value) operators.
+    // These define the preIncrement (i.e. --value) operators.
     AtomicInt& operator++() {
         __sync_add_and_fetch(&_value, 1);
         return *this;
@@ -113,34 +110,22 @@ public:
     }
 
     // Safe read of the value
-    T read() {
-        return __sync_fetch_and_add(&_value, 0);
-    }
+    T read() { return __sync_fetch_and_add(&_value, 0); }
 
     /// Atomic load with "acquire" memory-ordering semantic.
-    ALWAYS_INLINE T load() const {
-        return base::subtle::Acquire_Load(&_value);
-    }
+    ALWAYS_INLINE T load() const { return base::subtle::Acquire_Load(&_value); }
 
     /// Atomic store with "release" memory-ordering semantic.
-    ALWAYS_INLINE void store(T x) {
-        base::subtle::Release_Store(&_value, x);
-    }
+    ALWAYS_INLINE void store(T x) { base::subtle::Release_Store(&_value, x); }
 
     /// Atomic add with "barrier" memory-ordering semantic. Returns the new value.
-    ALWAYS_INLINE T add(T x) {
-        return base::subtle::Barrier_AtomicIncrement(&_value, x);
-    }
+    ALWAYS_INLINE T add(T x) { return base::subtle::Barrier_AtomicIncrement(&_value, x); }
 
     // Increments by delta (i.e. += delta) and returns the new val
-    T update_and_fetch(T delta) {
-        return __sync_add_and_fetch(&_value, delta);
-    }
+    T update_and_fetch(T delta) { return __sync_add_and_fetch(&_value, delta); }
 
     // Increment by delta and returns the old val
-    T fetch_and_update(T delta) {
-        return __sync_fetch_and_add(&_value, delta);
-    }
+    T fetch_and_update(T delta) { return __sync_fetch_and_add(&_value, delta); }
 
     // Updates the int to 'value' if value is larger
     void update_max(T value) {
@@ -175,9 +160,7 @@ public:
     }
 
     // Atomically updates _value with new_val. Returns the old _value.
-    T swap(const T& new_val) {
-        return __sync_lock_test_and_set(&_value, new_val);
-    }
+    T swap(const T& new_val) { return __sync_lock_test_and_set(&_value, new_val); }
 
 private:
     T _value;
@@ -189,7 +172,7 @@ typedef AtomicInt<int32_t> AtomicInt32;
 typedef AtomicInt<int64_t> AtomicInt64;
 
 /// Atomic pointer. Operations have the same semantics as AtomicInt.
-template<typename T>
+template <typename T>
 class AtomicPtr {
 public:
     AtomicPtr(T* initial = nullptr) : _ptr(reinterpret_cast<intptr_t>(initial)) {}
@@ -200,10 +183,16 @@ public:
     /// Atomic store with "release" memory-ordering semantic.
     inline void store(T* val) { _ptr.store(reinterpret_cast<intptr_t>(val)); }
 
+    /// Store 'new_val' and return the previous value. Implies a Release memory barrier
+    /// (i.e. the same as Store()).
+    inline T* swap(T* val) {
+        return reinterpret_cast<T*>(_ptr.swap(reinterpret_cast<intptr_t>(val)));
+    }
+
 private:
     AtomicInt<intptr_t> _ptr;
 };
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_COMMON_ATOMIC_H
+#endif // DORIS_BE_SRC_COMMON_ATOMIC_H

@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,44 +15,41 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_EXEC_BROKER_WRITER_H
-#define BDG_PALO_BE_SRC_EXEC_BROKER_WRITER_H
+#ifndef DORIS_BE_SRC_EXEC_BROKER_WRITER_H
+#define DORIS_BE_SRC_EXEC_BROKER_WRITER_H
 
 #include <stdint.h>
 
-#include <string>
 #include <map>
+#include <string>
 
 #include "common/status.h"
 #include "exec/file_writer.h"
-#include "gen_cpp/Types_types.h"
 #include "gen_cpp/PaloBrokerService_types.h"
+#include "gen_cpp/Types_types.h"
 
-namespace palo {
+namespace doris {
 
-class RuntimeState;
+class ExecEnv;
 class TBrokerRangeDesc;
 class TNetworkAddress;
-class RuntimeState;
 
 // Reader of broker file
 class BrokerWriter : public FileWriter {
 public:
-    BrokerWriter(RuntimeState* state,
-                  const std::vector<TNetworkAddress>& broker_addresses,
-                  const std::map<std::string, std::string>& properties,
-                  const std::string& dir,
-                  int64_t start_offset);
+    BrokerWriter(ExecEnv* env, const std::vector<TNetworkAddress>& broker_addresses,
+                 const std::map<std::string, std::string>& properties, const std::string& path,
+                 int64_t start_offset);
     virtual ~BrokerWriter();
 
     virtual Status open() override;
 
     virtual Status write(const uint8_t* buf, size_t buf_len, size_t* written_len) override;
 
-    virtual void close() override;
+    virtual Status close() override;
 
 private:
-    RuntimeState* _state;
+    ExecEnv* _env;
     const std::vector<TNetworkAddress>& _addresses;
     const std::map<std::string, std::string>& _properties;
     std::string _path;
@@ -67,6 +62,6 @@ private:
     int _addr_idx;
 };
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_EXEC_BROKER_WRITER_H
+#endif // DORIS_BE_SRC_EXEC_BROKER_WRITER_H

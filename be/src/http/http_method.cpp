@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -22,20 +20,18 @@
 #include <map>
 #include <string>
 
-namespace palo {
+namespace doris {
 
-static std::map<std::string, HttpMethod> s_method_by_desc = 
-        {
-            {"GET", HttpMethod::GET}, {"PUT", HttpMethod::PUT},
-            {"POST", HttpMethod::POST}, {"HEAD", HttpMethod::HEAD},
-            {"DELETE", HttpMethod::DELETE}, {"OPTIONS", HttpMethod::OPTIONS}, 
-        };
-static std::map<HttpMethod, std::string> s_desc_by_method = 
-        {
-            {HttpMethod::GET, "GET"}, {HttpMethod::PUT, "PUT"},
-            {HttpMethod::POST, "POST"}, {HttpMethod::HEAD, "HEAD"},
-            {HttpMethod::DELETE, "DELETE"}, {HttpMethod::OPTIONS, "OPTIONS"}, 
-        };
+static std::map<std::string, HttpMethod> s_method_by_desc = {
+        {"GET", HttpMethod::GET},       {"PUT", HttpMethod::PUT},
+        {"POST", HttpMethod::POST},     {"HEAD", HttpMethod::HEAD},
+        {"DELETE", HttpMethod::DELETE}, {"OPTIONS", HttpMethod::OPTIONS},
+};
+static std::map<HttpMethod, std::string> s_desc_by_method = {
+        {HttpMethod::GET, "GET"},       {HttpMethod::PUT, "PUT"},
+        {HttpMethod::POST, "POST"},     {HttpMethod::HEAD, "HEAD"},
+        {HttpMethod::DELETE, "DELETE"}, {HttpMethod::OPTIONS, "OPTIONS"},
+};
 
 HttpMethod to_http_method(const char* desc) {
     auto iter = s_method_by_desc.find(desc);
@@ -53,4 +49,4 @@ std::string to_method_desc(const HttpMethod& method) {
     return iter->second;
 }
 
-}
+} // namespace doris

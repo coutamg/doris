@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,25 +15,25 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <gtest/gtest.h>
-#include <boost/shared_ptr.hpp>
-#include "util/cpu_info.h"
 #include "runtime/result_buffer_mgr.h"
-#include "runtime/buffer_control_block.h"
-#include "gen_cpp/PaloInternalService_types.h"
 
-namespace palo {
+#include <gtest/gtest.h>
+
+#include <boost/shared_ptr.hpp>
+
+#include "gen_cpp/PaloInternalService_types.h"
+#include "runtime/buffer_control_block.h"
+#include "util/cpu_info.h"
+
+namespace doris {
 
 class ResultBufferMgrTest : public testing::Test {
 public:
-    ResultBufferMgrTest() {
-    }
-    virtual ~ResultBufferMgrTest() {
-    }
+    ResultBufferMgrTest() {}
+    virtual ~ResultBufferMgrTest() {}
 
 protected:
-    virtual void SetUp() {
-    }
+    virtual void SetUp() {}
 
 private:
 };
@@ -119,16 +116,16 @@ TEST_F(ResultBufferMgrTest, cancel_no_block) {
 
     ASSERT_TRUE(buffer_mgr.cancel(query_id).ok());
 }
-}
+} // namespace doris
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
-    // palo::init_glog("be-test");
+    // doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
-    palo::CpuInfo::init();
+    doris::CpuInfo::init();
     return RUN_ALL_TESTS();
 }
 /* vim: set ts=4 sw=4 sts=4 tw=100 */

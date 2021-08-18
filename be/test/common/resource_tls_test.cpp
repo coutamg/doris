@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -22,13 +19,13 @@
 
 #include <gtest/gtest.h>
 
+#include "common/configbase.h"
 #include "gen_cpp/Types_types.h"
 #include "util/logging.h"
 
-namespace palo {
+namespace doris {
 
-class ResourceTlsTest : public testing::Test {
-};
+class ResourceTlsTest : public testing::Test {};
 
 TEST_F(ResourceTlsTest, EmptyTest) {
     ASSERT_TRUE(ResourceTls::get_resource_tls() == nullptr);
@@ -38,24 +35,24 @@ TEST_F(ResourceTlsTest, EmptyTest) {
 TEST_F(ResourceTlsTest, NormalTest) {
     ResourceTls::init();
     ASSERT_TRUE(ResourceTls::get_resource_tls() == nullptr);
-    TResourceInfo *info = new TResourceInfo();
+    TResourceInfo* info = new TResourceInfo();
     info->user = "testUser";
     info->group = "testGroup";
     ASSERT_TRUE(ResourceTls::set_resource_tls(info) == 0);
-    TResourceInfo *getInfo = ResourceTls::get_resource_tls();
+    TResourceInfo* getInfo = ResourceTls::get_resource_tls();
     ASSERT_STREQ("testUser", getInfo->user.c_str());
     ASSERT_STREQ("testGroup", getInfo->group.c_str());
 }
 
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
-    palo::init_glog("be-test");
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

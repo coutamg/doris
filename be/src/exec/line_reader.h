@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -22,16 +19,15 @@
 
 #include "common/status.h"
 
-namespace palo {
+namespace doris {
 
 // This class is used for CSV scanner, to read content line by line
 class LineReader {
 public:
-    virtual ~LineReader() {
-    }
+    virtual ~LineReader() {}
     virtual Status read_line(const uint8_t** ptr, size_t* size, bool* eof) = 0;
 
     virtual void close() = 0;
 };
 
-}
+} // namespace doris

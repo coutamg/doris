@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,14 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <string>
-#include <gtest/gtest.h>
-
-#include "runtime/mem_pool.h"
 #include "runtime/string_buffer.hpp"
 
+#include <gtest/gtest.h>
 
-namespace palo {
+#include <string>
+
+#include "runtime/mem_pool.h"
+#include "runtime/mem_tracker.h"
+
+namespace doris {
 
 void validate_string(const std::string& std_str, const StringBuffer& str) {
     EXPECT_EQ(std_str.empty(), str.empty());
@@ -37,7 +36,8 @@ void validate_string(const std::string& std_str, const StringBuffer& str) {
 }
 
 TEST(StringBufferTest, Basic) {
-    MemPool pool;
+    MemTracker tracker;
+    MemPool pool(&tracker);
     StringBuffer str(&pool);
     std::string std_str;
 
@@ -73,16 +73,17 @@ TEST(StringBufferTest, Basic) {
     EXPECT_EQ(str.buffer_size(), strlen("HelloWorld"));
 }
 
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+#if 0
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
     init_glog("be-test");
+#endif
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
-

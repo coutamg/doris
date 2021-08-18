@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,67 +15,67 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_COMMON_OBJECT_POOL_H
-#define BDG_PALO_BE_SRC_COMMON_COMMON_OBJECT_POOL_H
+#ifndef DORIS_BE_SRC_COMMON_COMMON_OBJECT_POOL_H
+#define DORIS_BE_SRC_COMMON_COMMON_OBJECT_POOL_H
 
+#include <mutex>
 #include <vector>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/locks.hpp>
 
 #include "util/spinlock.h"
 
-namespace palo {
+namespace doris {
 
 // An ObjectPool maintains a list of C++ objects which are deallocated
 // by destroying the pool.
 // Thread-safe.
 class ObjectPool {
 public:
-    ObjectPool(): _objects() {}
+    ObjectPool() = default;
 
-    ~ObjectPool() {
-        clear();
-    }
+    ~ObjectPool() { clear(); }
 
     template <class T>
     T* add(T* t) {
-        // Create the object to be pushed to the shared vector outside the critical section.
         // TODO: Consider using a lock-free structure.
-        SpecificElement<T>* obj = new SpecificElement<T>(t);
-        DCHECK(obj != NULL);
-        boost::lock_guard<SpinLock> l(_lock);
-        _objects.push_back(obj);
+        std::lock_guard<SpinLock> l(_lock);
+        _objects.emplace_back(Element{t, [](void* obj) { delete reinterpret_cast<T*>(obj); }});
+        return t;
+    }
+
+    template <class T>
+    T* add_array(T* t) {
+        std::lock_guard<SpinLock> l(_lock);
+        _objects.emplace_back(Element{t, [](void* obj) { delete[] reinterpret_cast<T*>(obj); }});
         return t;
     }
 
     void clear() {
-        boost::lock_guard<SpinLock> l(_lock);
-        for (auto i = _objects.rbegin(); i != _objects.rend(); ++i) {
-            delete *i;
-        }
+        std::lock_guard<SpinLock> l(_lock);
+        for (Element& elem : _objects) elem.delete_fn(elem.obj);
         _objects.clear();
     }
 
+    void acquire_data(ObjectPool* src) {
+        _objects.insert(_objects.end(), src->_objects.begin(), src->_objects.end());
+        src->_objects.clear();
+    }
+
 private:
-    struct GenericElement {
-        virtual ~GenericElement() {}
+    DISALLOW_COPY_AND_ASSIGN(ObjectPool);
+
+    /// A generic deletion function pointer. Deletes its first argument.
+    using DeleteFn = void (*)(void*);
+
+    /// For each object, a pointer to the object and a function that deletes it.
+    struct Element {
+        void* obj;
+        DeleteFn delete_fn;
     };
 
-    template <class T>
-    struct SpecificElement : GenericElement {
-        SpecificElement(T* t): t(t) {}
-        ~SpecificElement() {
-            delete t;
-        }
-
-        T* t;
-    };
-
-    typedef std::vector<GenericElement*> ElementVector;
-    ElementVector _objects;
+    std::vector<Element> _objects;
     SpinLock _lock;
 };
 
-}
+} // namespace doris
 
 #endif

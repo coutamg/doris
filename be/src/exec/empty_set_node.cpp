@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,17 +17,14 @@
 
 #include "exec/empty_set_node.h"
 
-namespace palo {
+namespace doris {
 
-EmptySetNode::EmptySetNode(ObjectPool* pool, const TPlanNode& tnode,
-                     const DescriptorTbl& descs)
-    : ExecNode(pool, tnode, descs) {
-}
+EmptySetNode::EmptySetNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs)
+        : ExecNode(pool, tnode, descs) {}
 
 Status EmptySetNode::get_next(RuntimeState* state, RowBatch* row_batch, bool* eos) {
-  *eos = true;
-  return Status::OK;
+    *eos = true;
+    return Status::OK();
 }
 
-}
-
+} // namespace doris

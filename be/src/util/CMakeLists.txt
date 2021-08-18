@@ -1,6 +1,3 @@
-# Modifications copyright (C) 2017, Baidu.com, Inc.
-# Copyright 2017 The Apache Software Foundation
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -24,18 +21,25 @@ set(LIBRARY_OUTPUT_PATH "${BUILD_DIR}/src/util")
 # where to put generated binaries
 set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/src/util")
 
-add_library(Util STATIC
+set(UTIL_FILES
+  arrow/row_batch.cpp
+  arrow/row_block.cpp
+  arrow/utils.cpp
   bfd_parser.cpp
-  codec.cpp
-  compress.cpp
+  bitmap.cpp
+  block_compression.cpp
+  coding.cpp
   cpu_info.cpp
+  crc32c.cpp
+  date_func.cpp
   dynamic_util.cpp
   debug_util.cpp
-  decompress.cpp
   disk_info.cpp
+  errno.cpp
   hash_util.hpp
-  palo_metrics.cpp
-  logging.cpp
+  histogram.cpp
+  json_util.cpp
+  doris_metrics.cpp
   mem_info.cpp
   metrics.cpp
   murmur_hash3.cpp
@@ -43,7 +47,7 @@ add_library(Util STATIC
   parse_util.cpp
   path_builder.cpp
 # TODO: not supported on RHEL 5
-#  perf-counters.cpp
+# perf-counters.cpp
   progress_updater.cpp
   runtime_profile.cpp
   static_asserts.cpp
@@ -51,29 +55,66 @@ add_library(Util STATIC
   thrift_util.cpp
   thrift_client.cpp
   thrift_server.cpp
+  stack_util.cpp
   symbols_util.cpp
+  system_metrics.cpp
   url_parser.cpp
   url_coding.cpp
   file_utils.cpp
-  mysql_dtoa.cpp
   mysql_row_buffer.cpp
   tuple_row_compare.cpp
   error_util.cc
   spinlock.cc
   filesystem_util.cc
   load_error_hub.cpp
-  mysql_load_error_hub.cpp
+  broker_load_error_hub.cpp
+  broker_storage_backend.cpp
   null_load_error_hub.cpp
+  time.cpp
+  os_info.cpp
+  os_util.cpp
+  # coding_util.cpp
+  cidr.cpp
+  core_local.cpp
+  uid_util.cpp
+  aes_util.cpp
+  string_util.cpp
+  md5.cpp
+  thrift_rpc_helper.cpp
+  faststring.cc
+  slice.cpp
+  frame_of_reference_coding.cpp
+  zip_util.cpp
+  utf8_check.cpp
+  cgroup_util.cpp
+  path_util.cpp
+  file_cache.cpp
+  monotime.cpp
+  mutex.cpp
+  condition_variable.cpp
+  thread.cpp
+  threadpool.cpp
+  trace.cpp
+  trace_metrics.cpp
+  timezone_utils.cpp
+  easy_json.cc
+  mustache/mustache.cc
+  brpc_stub_cache.cpp
+  zlib.cpp
+  pprof_utils.cpp
+  s3_uri.cpp
+  s3_storage_backend.cpp
+  s3_util.cpp
+  topn_counter.cpp
 )
 
-#ADD_BE_TEST(integer-array-test)
-#ADD_BE_TEST(runtime-profile-test)
-#ADD_BE_TEST(benchmark-test)
-#ADD_BE_TEST(decompress-test)
-#ADD_BE_TEST(metrics-test)
-#ADD_BE_TEST(debug-util-test)
-#ADD_BE_TEST(url-coding-test)
-#ADD_BE_TEST(thrift-util-test)
-#ADD_BE_TEST(bit-util-test)
-#ADD_BE_TEST(rle-test)
-##ADD_BE_TEST(perf-counters-test)
+if (WITH_MYSQL)
+    set(UTIL_FILES ${UTIL_FILES}
+        mysql_load_error_hub.cpp
+        )
+endif()
+
+add_library(Util STATIC
+    ${UTIL_FILES}
+)
+

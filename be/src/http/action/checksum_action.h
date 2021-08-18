@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,15 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef  BDG_PALO_BE_SRC_HTTP_CHECKSUM_ACTION_H
-#define  BDG_PALO_BE_SRC_HTTP_CHECKSUM_ACTION_H
+#ifndef DORIS_BE_SRC_HTTP_CHECKSUM_ACTION_H
+#define DORIS_BE_SRC_HTTP_CHECKSUM_ACTION_H
 
 #include <boost/scoped_ptr.hpp>
 
 #include "http/http_handler.h"
-#include "olap/command_executor.h"
 
-namespace palo {
+namespace doris {
 
 class ExecEnv;
 
@@ -33,18 +30,17 @@ class ChecksumAction : public HttpHandler {
 public:
     explicit ChecksumAction(ExecEnv* exec_env);
 
-    virtual ~ChecksumAction();
+    virtual ~ChecksumAction() {}
 
-    virtual void handle(HttpRequest *req, HttpChannel *channel);
+    void handle(HttpRequest* req) override;
+
 private:
     int64_t do_checksum(int64_t tablet_id, int64_t version, int64_t version_hash,
-            int32_t schema_hash, HttpRequest *req, HttpChannel *channel);
+                        int32_t schema_hash, HttpRequest* req);
 
     ExecEnv* _exec_env;
-    CommandExecutor* _command_executor;
 
 }; // end class ChecksumAction
 
-} // end namespace palo
-#endif // BDG_PALO_BE_SRC_COMMON_UTIL_DOWNLOAD_ACTION_H
-
+} // end namespace doris
+#endif // DORIS_BE_SRC_COMMON_UTIL_DOWNLOAD_ACTION_H

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,18 +16,15 @@
 // under the License.
 
 #include "runtime/raw_value.h"
+#include "util/types.h"
 
-namespace palo {
+namespace doris {
 
 int RawValue::compare(const void* v1, const void* v2, const TypeDescriptor& type) {
     const StringValue* string_value1;
     const StringValue* string_value2;
     const DateTimeValue* ts_value1;
     const DateTimeValue* ts_value2;
-    const DecimalValue* decimal_value1;
-    const DecimalValue* decimal_value2;
-    const __int128* large_int_value1;
-    const __int128* large_int_value2;
     float f1 = 0;
     float f2 = 0;
     double d1 = 0;
@@ -59,8 +53,7 @@ int RawValue::compare(const void* v1, const void* v2, const TypeDescriptor& type
         return *reinterpret_cast<const int8_t*>(v1) - *reinterpret_cast<const int8_t*>(v2);
 
     case TYPE_SMALLINT:
-        return *reinterpret_cast<const int16_t*>(v1) -
-               *reinterpret_cast<const int16_t*>(v2);
+        return *reinterpret_cast<const int16_t*>(v1) - *reinterpret_cast<const int16_t*>(v2);
 
     case TYPE_INT:
         i1 = *reinterpret_cast<const int32_t*>(v1);
@@ -86,7 +79,7 @@ int RawValue::compare(const void* v1, const void* v2, const TypeDescriptor& type
 
     case TYPE_CHAR:
     case TYPE_VARCHAR:
-    case TYPE_HLL: 
+    case TYPE_HLL:
         string_value1 = reinterpret_cast<const StringValue*>(v1);
         string_value2 = reinterpret_cast<const StringValue*>(v2);
         return string_value1->compare(*string_value2);
@@ -97,17 +90,18 @@ int RawValue::compare(const void* v1, const void* v2, const TypeDescriptor& type
         ts_value2 = reinterpret_cast<const DateTimeValue*>(v2);
         return *ts_value1 > *ts_value2 ? 1 : (*ts_value1 < *ts_value2 ? -1 : 0);
 
-    case TYPE_DECIMAL:
-        decimal_value1 = reinterpret_cast<const DecimalValue*>(v1);
-        decimal_value2 = reinterpret_cast<const DecimalValue*>(v2);
-        return (*decimal_value1 > *decimal_value2)
-                ? 1 : (*decimal_value1 < *decimal_value2 ? -1 : 0);
+    case TYPE_DECIMALV2: {
+        DecimalV2Value decimal_value1(reinterpret_cast<const PackedInt128*>(v1)->value);
+        DecimalV2Value decimal_value2(reinterpret_cast<const PackedInt128*>(v2)->value);
+        return (decimal_value1 > decimal_value2) ? 1 : (decimal_value1 < decimal_value2 ? -1 : 0);
+    }
 
-    case TYPE_LARGEINT:
-        large_int_value1 = reinterpret_cast<const __int128*>(v1);
-        large_int_value2 = reinterpret_cast<const __int128*>(v2);
-        return *large_int_value1 > *large_int_value2 ? 1 : 
-                (*large_int_value1 < *large_int_value2 ? -1 : 0);
+    case TYPE_LARGEINT: {
+        __int128 large_int_value1 = reinterpret_cast<const PackedInt128*>(v1)->value;
+        __int128 large_int_value2 = reinterpret_cast<const PackedInt128*>(v2)->value;
+        return large_int_value1 > large_int_value2 ? 1
+                                                   : (large_int_value1 < large_int_value2 ? -1 : 0);
+    }
 
     default:
         DCHECK(false) << "invalid type: " << type.type;
@@ -115,4 +109,4 @@ int RawValue::compare(const void* v1, const void* v2, const TypeDescriptor& type
     };
 }
 
-}
+} // namespace doris

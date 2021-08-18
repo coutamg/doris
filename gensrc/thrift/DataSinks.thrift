@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,13 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-namespace cpp palo
-namespace java com.baidu.palo.thrift
+namespace cpp doris
+namespace java org.apache.doris.thrift
 
 include "Exprs.thrift"
 include "Types.thrift"
 include "Descriptors.thrift"
 include "Partitions.thrift"
+include "PlanNodes.thrift"
 
 enum TDataSinkType {
     DATA_STREAM_SINK,
@@ -32,6 +30,31 @@ enum TDataSinkType {
     DATA_SPLIT_SINK,
     MYSQL_TABLE_SINK,
     EXPORT_SINK,
+    OLAP_TABLE_SINK,
+    MEMORY_SCRATCH_SINK,
+    ODBC_TABLE_SINK
+}
+
+enum TResultSinkType {
+    MYSQL_PROTOCAL,
+    FILE
+}
+
+struct TResultFileSinkOptions {
+    1: required string file_path
+    2: required PlanNodes.TFileFormatType file_format
+    3: optional string column_separator    // only for csv
+    4: optional string line_delimiter  // only for csv
+    5: optional i64 max_file_size_bytes
+    6: optional list<Types.TNetworkAddress> broker_addresses; // only for remote file
+    7: optional map<string, string> broker_properties // only for remote file
+    8: optional string success_file_name
+    9: optional list<list<string>> schema            // for parquet/orc file
+    10: optional map<string, string> file_properties // for parquet/orc file
+}
+
+struct TMemoryScratchSink {
+
 }
 
 // Sink which forwards data to a remote plan fragment,
@@ -49,8 +72,9 @@ struct TDataStreamSink {
   3: optional bool ignore_not_found
 }
 
-// Reserved for 
 struct TResultSink {
+    1: optional TResultSinkType type;
+    2: optional TResultFileSinkOptions file_options;
 }
 
 struct TMysqlTableSink {
@@ -60,6 +84,12 @@ struct TMysqlTableSink {
     4: required string passwd
     5: required string db
     6: required string table
+}
+
+struct TOdbcTableSink {
+    1: optional string connect_string
+    2: optional string table
+    3: optional bool use_transaction
 }
 
 // Following is used to split data read from 
@@ -87,6 +117,23 @@ struct TExportSink {
     6: optional map<string, string> properties;
 }
 
+struct TOlapTableSink {
+    1: required Types.TUniqueId load_id
+    2: required i64 txn_id
+    3: required i64 db_id
+    4: required i64 table_id
+    5: required i32 tuple_id
+    6: required i32 num_replicas
+    7: required bool need_gen_rollup
+    8: optional string db_name
+    9: optional string table_name
+    10: required Descriptors.TOlapTableSchemaParam schema
+    11: required Descriptors.TOlapTablePartitionParam partition
+    12: required Descriptors.TOlapTableLocationParam location
+    13: required Descriptors.TPaloNodesInfo nodes_info
+    14: optional i64 load_channel_timeout_s // the timeout of load channels in second
+}
+
 struct TDataSink {
   1: required TDataSinkType type
   2: optional TDataStreamSink stream_sink
@@ -94,5 +141,8 @@ struct TDataSink {
   4: optional TDataSplitSink split_sink
   5: optional TMysqlTableSink mysql_table_sink
   6: optional TExportSink export_sink
+  7: optional TOlapTableSink olap_table_sink
+  8: optional TMemoryScratchSink memory_scratch_sink
+  9: optional TOdbcTableSink odbc_table_sink
 }
 

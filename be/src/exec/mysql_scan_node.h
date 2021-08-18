@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,16 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef  BDG_PALO_BE_SRC_QUERY_EXEC_MYSQL_SCAN_NODE_H
-#define  BDG_PALO_BE_SRC_QUERY_EXEC_MYSQL_SCAN_NODE_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_MYSQL_SCAN_NODE_H
+#define DORIS_BE_SRC_QUERY_EXEC_MYSQL_SCAN_NODE_H
 
-#include <boost/scoped_ptr.hpp>
+#include <memory>
 
-#include "runtime/descriptors.h"
 #include "exec/mysql_scanner.h"
 #include "exec/scan_node.h"
+#include "runtime/descriptors.h"
 
-namespace palo {
+namespace doris {
 
 class TextConverter;
 class Tuple;
@@ -64,7 +62,7 @@ private:
     // Writes a slot in _tuple from an MySQL value containing text data.
     // The Mysql value is converted into the appropriate target type.
     Status write_text_slot(char* value, int value_length, SlotDescriptor* slot,
-                         RuntimeState* state);
+                           RuntimeState* state);
 
     bool _is_init;
     MysqlScannerParam _my_param;
@@ -84,15 +82,15 @@ private:
     // Tuple index in tuple row.
     int _slot_num;
     // Pool for allocating tuple data, including all varying-length slots.
-    boost::scoped_ptr<MemPool> _tuple_pool;
+    std::unique_ptr<MemPool> _tuple_pool;
     // Jni helper for scanning an HBase table.
-    boost::scoped_ptr<MysqlScanner> _mysql_scanner;
+    std::unique_ptr<MysqlScanner> _mysql_scanner;
     // Helper class for converting text to other types;
-    boost::scoped_ptr<TextConverter> _text_converter;
+    std::unique_ptr<TextConverter> _text_converter;
     // Current tuple.
-    Tuple* _tuple;
+    Tuple* _tuple = nullptr;
 };
 
-}
+} // namespace doris
 
 #endif

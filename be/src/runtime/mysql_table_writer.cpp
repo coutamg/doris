@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,26 +15,30 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "runtime/mysql_table_writer.h"
+#include <mysql/mysql.h>
 
+#define __DorisMysql MYSQL
 #include <sstream>
+
+#include "exprs/expr.h"
+#include "exprs/expr_context.h"
+#include "runtime/mysql_table_writer.h"
 #include "runtime/row_batch.h"
 #include "runtime/tuple_row.h"
-#include "exprs/expr.h"
+#include "util/types.h"
 
-namespace palo {
+namespace doris {
 
 std::string MysqlConnInfo::debug_string() const {
     std::stringstream ss;
-    
-    ss << "(host=" << host << ",port=" << port << ",user=" << user
-        << ",db=" << db << ",passwd=" << passwd << ")";
+
+    ss << "(host=" << host << ",port=" << port << ",user=" << user << ",db=" << db
+       << ",passwd=" << passwd << ")";
     return ss.str();
 }
 
-MysqlTableWriter::MysqlTableWriter(const std::vector<ExprContext*>& output_expr_ctxs) :
-        _output_expr_ctxs(output_expr_ctxs) {
-}
+MysqlTableWriter::MysqlTableWriter(const std::vector<ExprContext*>& output_expr_ctxs)
+        : _output_expr_ctxs(output_expr_ctxs) {}
 
 MysqlTableWriter::~MysqlTableWriter() {
     if (_mysql_conn) {
@@ -47,34 +49,29 @@ MysqlTableWriter::~MysqlTableWriter() {
 Status MysqlTableWriter::open(const MysqlConnInfo& conn_info, const std::string& tbl) {
     _mysql_conn = mysql_init(nullptr);
     if (_mysql_conn == nullptr) {
-        return Status("Call mysql_init failed.");
+        return Status::InternalError("Call mysql_init failed.");
     }
 
-    MYSQL* res = mysql_real_connect(
-            _mysql_conn,
-            conn_info.host.c_str(), 
-            conn_info.user.c_str(),
-            conn_info.passwd.c_str(),
-            conn_info.db.c_str(),
-            conn_info.port,
-            NULL,   // unix socket
-            0);     // flags
+    MYSQL* res = mysql_real_connect(_mysql_conn, conn_info.host.c_str(), conn_info.user.c_str(),
+                                    conn_info.passwd.c_str(), conn_info.db.c_str(), conn_info.port,
+                                    NULL, // unix socket
+                                    0);   // flags
     if (res == nullptr) {
         std::stringstream ss;
         ss << "mysql_real_connect failed because " << mysql_error(_mysql_conn);
-        return Status(ss.str());
+        return Status::InternalError(ss.str());
     }
 
     // set character
     if (mysql_set_character_set(_mysql_conn, "utf8")) {
         std::stringstream ss;
         ss << "mysql_set_character_set failed because " << mysql_error(_mysql_conn);
-        return Status(ss.str());
+        return Status::InternalError(ss.str());
     }
 
     _mysql_tbl = tbl;
 
-    return Status::OK;
+    return Status::OK();
 }
 
 Status MysqlTableWriter::insert_row(TupleRow* row) {
@@ -131,31 +128,33 @@ Status MysqlTableWriter::insert_row(TupleRow* row) {
                     ss << "NULL";
                 }
             } else {
-                char *buf = new char[2 * string_val->len + 1];
+                char* buf = new char[2 * string_val->len + 1];
                 mysql_real_escape_string(_mysql_conn, buf, string_val->ptr, string_val->len);
                 ss << "\'" << buf << "\'";
                 delete[] buf;
             }
             break;
         }
-        case TYPE_DECIMAL: {
-            const DecimalValue* decimal_val = reinterpret_cast<const DecimalValue*>(item);
+
+        case TYPE_DECIMALV2: {
+            const DecimalV2Value decimal_val(reinterpret_cast<const PackedInt128*>(item)->value);
             std::string decimal_str;
             int output_scale = _output_expr_ctxs[i]->root()->output_scale();
 
             if (output_scale > 0 && output_scale <= 30) {
-                decimal_str = decimal_val->to_string(output_scale);
+                decimal_str = decimal_val.to_string(output_scale);
             } else {
-                decimal_str = decimal_val->to_string();
+                decimal_str = decimal_val.to_string();
             }
             ss << decimal_str;
             break;
         }
+
         default: {
             std::stringstream err_ss;
-            err_ss << "can't convert this type to mysql type. type = " <<
-                _output_expr_ctxs[i]->root()->type();
-            return Status(err_ss.str());
+            err_ss << "can't convert this type to mysql type. type = "
+                   << _output_expr_ctxs[i]->root()->type();
+            return Status::InternalError(err_ss.str());
         }
         }
     }
@@ -167,16 +166,16 @@ Status MysqlTableWriter::insert_row(TupleRow* row) {
     if (mysql_real_query(_mysql_conn, insert_stmt.c_str(), insert_stmt.length())) {
         std::stringstream err_ss;
         err_ss << "Insert to mysql server(" << mysql_get_host_info(_mysql_conn)
-            << ") failed, because: " << mysql_error(_mysql_conn);
-        return Status(err_ss.str());
+               << ") failed, because: " << mysql_error(_mysql_conn);
+        return Status::InternalError(err_ss.str());
     }
 
-    return Status::OK;
+    return Status::OK();
 }
 
 Status MysqlTableWriter::append(RowBatch* batch) {
     if (batch == nullptr || batch->num_rows() == 0) {
-        return Status::OK;
+        return Status::OK();
     }
 
     int num_rows = batch->num_rows();
@@ -184,8 +183,7 @@ Status MysqlTableWriter::append(RowBatch* batch) {
         RETURN_IF_ERROR(insert_row(batch->get_row(i)));
     }
 
-    return Status::OK;
+    return Status::OK();
 }
 
-}
-
+} // namespace doris

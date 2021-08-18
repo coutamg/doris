@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,16 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef  BDG_PALO_BE_SRC_COMMON_UTIL_DOWNLOAD_ACTION_H
-#define  BDG_PALO_BE_SRC_COMMON_UTIL_DOWNLOAD_ACTION_H
-
-#include <boost/scoped_ptr.hpp>
+#ifndef DORIS_BE_SRC_HTTP_DOWNLOAD_ACTION_H
+#define DORIS_BE_SRC_HTTP_DOWNLOAD_ACTION_H
 
 #include "exec/csv_scanner.h"
 #include "exec/scan_node.h"
+#include "http/http_handler.h"
 #include "runtime/descriptors.h"
 
-namespace palo {
+namespace doris {
 
 class ExecEnv;
 
@@ -34,34 +31,37 @@ class ExecEnv;
 //
 // TODO(lingbin): implements two useful header ('If-Modified-Since' and 'RANGE') to reduce
 // transmission consumption.
-// We use parameter named 'file' to specify the static resource path, it relative to the
-// root path of http server.
+// We use parameter named 'file' to specify the static resource path, it is an absolute path.
 class DownloadAction : public HttpHandler {
 public:
-    DownloadAction(ExecEnv* exec_env, const std::string& base_dir);
+    DownloadAction(ExecEnv* exec_env, const std::vector<std::string>& allow_dirs);
+
+    // for load error
+    DownloadAction(ExecEnv* exec_env, const std::string& error_log_root_dir);
 
     virtual ~DownloadAction() {}
 
-    virtual void handle(HttpRequest *req, HttpChannel *channel);
+    void handle(HttpRequest* req) override;
+
 private:
-    void do_file_response(const std::string& dir_path, HttpRequest *req, HttpChannel *channel);
-    void do_dir_response(const std::string& dir_path, HttpRequest *req, HttpChannel *channel);
+    enum DOWNLOAD_TYPE {
+        NORMAL = 1,
+        ERROR_LOG = 2,
+    };
 
-    Status get_file_content(
-            FILE* fp, char* buffer, int32_t buffer_size,
-            int32_t* readed_size, bool* eos);
+    Status check_token(HttpRequest* req);
+    Status check_path_is_allowed(const std::string& path);
+    Status check_log_path_is_allowed(const std::string& file_path);
 
-    int64_t get_file_size(FILE* fp);
-
-    std::string get_file_extension(const std::string& file_name);
-
-    std::string get_content_type(const std::string& file_name);
+    void handle_normal(HttpRequest* req, const std::string& file_param);
+    void handle_error_log(HttpRequest* req, const std::string& file_param);
 
     ExecEnv* _exec_env;
-    std::string _base_dir;
+    DOWNLOAD_TYPE _download_type;
 
+    std::vector<std::string> _allow_paths;
+    std::string _error_log_root_dir;
 }; // end class DownloadAction
 
-} // end namespace palo
-#endif // BDG_PALO_BE_SRC_COMMON_UTIL_DOWNLOAD_ACTION_H
-
+} // end namespace doris
+#endif // DORIS_BE_SRC_HTTP_DOWNLOAD_ACTION_H

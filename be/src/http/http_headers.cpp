@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,7 +17,7 @@
 
 #include "http/http_headers.h"
 
-namespace palo {
+namespace doris {
 
 const char* HttpHeaders::ACCEPT = "Accept";
 const char* HttpHeaders::ACCEPT_CHARSET = "Accept-Charset";
@@ -95,4 +93,6 @@ const char* HttpHeaders::WEBSOCKET_ORIGIN = "WebSocket-Origin";
 const char* HttpHeaders::WEBSOCKET_PROTOCOL = "WebSocket-Protocol";
 const char* HttpHeaders::WWW_AUTHENTICATE = "WWW-Authenticate";
 
-}
+const std::string HttpHeaders::JsonType = "application/json";
+
+} // namespace doris

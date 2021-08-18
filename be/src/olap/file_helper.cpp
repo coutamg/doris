@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,31 +17,42 @@
 
 #include "olap/file_helper.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <sys/stat.h>
 
 #include <string>
 #include <vector>
 
-#include <errno.h>
-
+#include "common/config.h"
 #include "olap/olap_common.h"
 #include "olap/olap_define.h"
-#include "olap/olap_engine.h"
+#include "olap/storage_engine.h"
 #include "olap/utils.h"
 #include "util/debug_util.h"
 
 using std::string;
 
-namespace palo {
+namespace doris {
 
-FileHandler::FileHandler() :
-        _fd(-1),
-        _wr_length(0),
-        _file_name(""),
-        _is_using_cache(false),
-        _cache_handle(NULL) {
-    _fd_cache = OLAPEngine::get_instance()->file_descriptor_lru_cache();
+Cache* FileHandler::_s_fd_cache = nullptr;
+
+FileHandler::FileHandler()
+        : _fd(-1), _wr_length(0), _file_name(""), _is_using_cache(false), _cache_handle(NULL) {
+    static std::once_flag once_flag;
+#ifdef BE_TEST
+    std::call_once(once_flag, [] {
+        _s_fd_cache = new_lru_cache("FileHandlerCacheTest", config::file_descriptor_cache_capacity);
+    });
+#else
+    // storage engine may not be opened when doris try to read and write
+    // temp file under the storage root path. So we need to check it.
+    if (StorageEngine::instance() != nullptr &&
+        StorageEngine::instance()->file_cache() != nullptr) {
+        std::call_once(once_flag,
+                       [] { _s_fd_cache = StorageEngine::instance()->file_cache().get(); });
+    }
+#endif
 }
 
 FileHandler::~FileHandler() {
@@ -62,19 +71,27 @@ OLAPStatus FileHandler::open(const string& file_name, int flag) {
     _fd = ::open(file_name.c_str(), flag);
 
     if (_fd < 0) {
-        OLAP_LOG_WARNING("failed to open file. [err=%m file_name='%s' flag=%d]",
-                         file_name.c_str(), flag);
+        char errmsg[64];
+        LOG(WARNING) << "failed to open file. [err=" << strerror_r(errno, errmsg, 64)
+                     << ", file_name='" << file_name << "' flag=" << flag << "]";
+        if (errno == EEXIST) {
+            return OLAP_ERR_FILE_ALREADY_EXIST;
+        }
         return OLAP_ERR_IO_ERROR;
     }
 
-    OLAP_LOG_DEBUG("success to open file. [file_name='%s' flag=%d fd=%d]",
-                   file_name.c_str(), flag, _fd);
+    VLOG_NOTICE << "success to open file. file_name=" << file_name << ", mode=" << flag
+            << " fd=" << _fd;
     _is_using_cache = false;
     _file_name = file_name;
     return OLAP_SUCCESS;
 }
 
 OLAPStatus FileHandler::open_with_cache(const string& file_name, int flag) {
+    if (_s_fd_cache == nullptr) {
+        return open(file_name, flag);
+    }
+
     if (_fd != -1 && _file_name == file_name) {
         return OLAP_SUCCESS;
     }
@@ -84,26 +101,28 @@ OLAPStatus FileHandler::open_with_cache(const string& file_name, int flag) {
     }
 
     CacheKey key(file_name.c_str(), file_name.size());
-    _cache_handle = _fd_cache->lookup(key);
+    _cache_handle = _s_fd_cache->lookup(key);
     if (NULL != _cache_handle) {
         FileDescriptor* file_desc =
-            reinterpret_cast<FileDescriptor*>(_fd_cache->value(_cache_handle));
+                reinterpret_cast<FileDescriptor*>(_s_fd_cache->value(_cache_handle));
         _fd = file_desc->fd;
-        OLAP_LOG_DEBUG("success to open file with cache. [file_name='%s' flag=%d fd=%d]",
-                       file_name.c_str(), flag, _fd);
+        VLOG_NOTICE << "success to open file with cache. file_name=" << file_name << ", mode=" << flag
+                << " fd=" << _fd;
     } else {
         _fd = ::open(file_name.c_str(), flag);
         if (_fd < 0) {
-            OLAP_LOG_WARNING("failed to open file. [err=%m file_name='%s' flag=%d]",
-                             file_name.c_str(), flag);
+            char errmsg[64];
+            LOG(WARNING) << "failed to open file. [err=" << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << file_name << "' flag=" << flag << "]";
+            if (errno == EEXIST) {
+                return OLAP_ERR_FILE_ALREADY_EXIST;
+            }
             return OLAP_ERR_IO_ERROR;
         }
         FileDescriptor* file_desc = new FileDescriptor(_fd);
-        _cache_handle = _fd_cache->insert(
-                            key, file_desc, 1,
-                            &_delete_cache_file_descriptor);
-        OLAP_LOG_DEBUG("success to open file. [file_name='%s' flag=%d fd=%d]",
-                        file_name.c_str(), flag, _fd);
+        _cache_handle = _s_fd_cache->insert(key, file_desc, 1, &_delete_cache_file_descriptor);
+        VLOG_NOTICE << "success to open file with cache. "
+                << "file_name=" << file_name << ", mode=" << flag << ", fd=" << _fd;
     }
     _is_using_cache = true;
     _file_name = file_name;
@@ -122,19 +141,23 @@ OLAPStatus FileHandler::open_with_mode(const string& file_name, int flag, int mo
     _fd = ::open(file_name.c_str(), flag, mode);
 
     if (_fd < 0) {
-        OLAP_LOG_WARNING("failed to open file. [err=%m file_name='%s' flag=%d mode=%d]",
-                         file_name.c_str(), flag, mode);
+        char err_buf[64];
+        LOG(WARNING) << "failed to open file. [err=" << strerror_r(errno, err_buf, 64)
+                     << " file_name='" << file_name << "' flag=" << flag << " mode=" << mode << "]";
+        if (errno == EEXIST) {
+            return OLAP_ERR_FILE_ALREADY_EXIST;
+        }
         return OLAP_ERR_IO_ERROR;
     }
 
-    OLAP_LOG_DEBUG("success to open file. [file_name='%s' flag=%d mode=%d fd=%d]",
-                   file_name.c_str(), flag, mode, _fd);
+    VLOG_NOTICE << "success to open file. file_name=" << file_name << ", mode=" << mode
+            << ", fd=" << _fd;
     _file_name = file_name;
     return OLAP_SUCCESS;
 }
 
-OLAPStatus FileHandler::release() {
-    _fd_cache->release(_cache_handle);
+OLAPStatus FileHandler::_release() {
+    _s_fd_cache->release(_cache_handle);
     _cache_handle = NULL;
     _is_using_cache = false;
     return OLAP_SUCCESS;
@@ -145,8 +168,8 @@ OLAPStatus FileHandler::close() {
         return OLAP_SUCCESS;
     }
 
-    if (_is_using_cache) {
-        release();
+    if (_is_using_cache && _s_fd_cache != nullptr) {
+        _release();
     } else {
         // try to sync page cache if have written some bytes
         if (_wr_length > 0) {
@@ -158,12 +181,15 @@ OLAPStatus FileHandler::close() {
 
         // 在一些极端情况下(fd可用,但fsync失败)可能造成句柄泄漏
         if (::close(_fd) < 0) {
-            OLAP_LOG_WARNING("failed to close file. [err=%m file_name='%s' fd=%d]",
-                             _file_name.c_str(), _fd);
+            char errmsg[64];
+            LOG(WARNING) << "failed to close file. [err= " << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << _file_name << "' fd=" << _fd << "]";
             return OLAP_ERR_IO_ERROR;
         }
     }
 
+    VLOG_NOTICE << "finished to close file. "
+            << "file_name=" << _file_name << ", fd=" << _fd;
     _fd = -1;
     _file_name = "";
     _wr_length = 0;
@@ -177,14 +203,16 @@ OLAPStatus FileHandler::pread(void* buf, size_t size, size_t offset) {
         ssize_t rd_size = ::pread(_fd, ptr, size, offset);
 
         if (rd_size < 0) {
-            OLAP_LOG_WARNING("failed to pread from file. "
-                             "[err=%m file_name='%s' fd=%d size=%ld offset=%ld]",
-                             _file_name.c_str(), _fd, size, offset);
+            char errmsg[64];
+            LOG(WARNING) << "failed to pread from file. [err= " << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << _file_name << "' fd=" << _fd << " size=" << size
+                         << " offset=" << offset << "]";
             return OLAP_ERR_IO_ERROR;
         } else if (0 == rd_size) {
-            OLAP_LOG_WARNING("read unenough from file. "
-                             "[err=%m file_name='%s' fd=%d size=%ld offset=%ld]",
-                             _file_name.c_str(), _fd, size, offset);
+            char errmsg[64];
+            LOG(WARNING) << "read unenough from file. [err= " << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << _file_name << "' fd=" << _fd << " size=" << size
+                         << " offset=" << offset << "]";
             return OLAP_ERR_READ_UNENOUGH;
         }
 
@@ -197,20 +225,22 @@ OLAPStatus FileHandler::pread(void* buf, size_t size, size_t offset) {
 }
 
 OLAPStatus FileHandler::write(const void* buf, size_t buf_size) {
-
     size_t org_buf_size = buf_size;
     const char* ptr = reinterpret_cast<const char*>(buf);
     while (buf_size > 0) {
         ssize_t wr_size = ::write(_fd, ptr, buf_size);
 
         if (wr_size < 0) {
-            OLAP_LOG_WARNING("failed to write to file. [err=%m file_name='%s' fd=%d size=%ld]",
-                             _file_name.c_str(), _fd, buf_size);
+            char errmsg[64];
+            LOG(WARNING) << "failed to write to file. [err= " << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << _file_name << "' fd=" << _fd << " size=" << buf_size
+                         << "]";
             return OLAP_ERR_IO_ERROR;
-        }  else if (0 == wr_size) {
-            OLAP_LOG_WARNING("write unenough to file. "
-                             "[err=%m file_name='%s' fd=%d size=%ld]",
-                             _file_name.c_str(), _fd, buf_size);
+        } else if (0 == wr_size) {
+            char errmsg[64];
+            LOG(WARNING) << "write unenough to file. [err=" << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << _file_name << "' fd=" << _fd << " size=" << buf_size
+                         << "]";
             return OLAP_ERR_IO_ERROR;
         }
 
@@ -231,18 +261,21 @@ OLAPStatus FileHandler::write(const void* buf, size_t buf_size) {
 OLAPStatus FileHandler::pwrite(const void* buf, size_t buf_size, size_t offset) {
     const char* ptr = reinterpret_cast<const char*>(buf);
 
+    size_t org_buf_size = buf_size;
     while (buf_size > 0) {
         ssize_t wr_size = ::pwrite(_fd, ptr, buf_size, offset);
 
         if (wr_size < 0) {
-            OLAP_LOG_WARNING("failed to pwrite to file. "
-                             "[err=%m file_name='%s' fd=%d size=%ld offset=%ld]",
-                             _file_name.c_str(), _fd, buf_size, offset);
+            char errmsg[64];
+            LOG(WARNING) << "failed to pwrite to file. [err= " << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << _file_name << "' fd=" << _fd << " size=" << buf_size
+                         << " offset=" << offset << "]";
             return OLAP_ERR_IO_ERROR;
         } else if (0 == wr_size) {
-            OLAP_LOG_WARNING("pwrite unenough to file. "
-                             "[err=%m file_name='%s' fd=%d size=%ld offset=%ld]",
-                             _file_name.c_str(), _fd, buf_size, offset);
+            char errmsg[64];
+            LOG(WARNING) << "pwrite unenough to file. [err= " << strerror_r(errno, errmsg, 64)
+                         << " file_name='" << _file_name << "' fd=" << _fd << " size=" << buf_size
+                         << " offset=" << offset << "]";
             return OLAP_ERR_IO_ERROR;
         }
 
@@ -250,6 +283,7 @@ OLAPStatus FileHandler::pwrite(const void* buf, size_t buf_size, size_t offset) 
         ptr += wr_size;
         offset += wr_size;
     }
+    _wr_length += org_buf_size;
 
     return OLAP_SUCCESS;
 }
@@ -265,10 +299,7 @@ off_t FileHandler::length() const {
     return stat_data.st_size;
 }
 
-FileHandlerWithBuf::FileHandlerWithBuf() :
-    _fp(NULL),
-    _file_name("") {
-}
+FileHandlerWithBuf::FileHandlerWithBuf() : _fp(NULL), _file_name("") {}
 
 FileHandlerWithBuf::~FileHandlerWithBuf() {
     this->close();
@@ -286,13 +317,17 @@ OLAPStatus FileHandlerWithBuf::open(const string& file_name, const char* mode) {
     _fp = ::fopen(file_name.c_str(), mode);
 
     if (NULL == _fp) {
-        OLAP_LOG_WARNING("failed to open file. [err=%m file_name='%s' flag='%s']",
-                         file_name.c_str(), mode);
+        char errmsg[64];
+        LOG(WARNING) << "failed to open file. [err= " << strerror_r(errno, errmsg, 64)
+                     << " file_name='" << file_name << "' flag='" << mode << "']";
+        if (errno == EEXIST) {
+            return OLAP_ERR_FILE_ALREADY_EXIST;
+        }
         return OLAP_ERR_IO_ERROR;
     }
 
-    OLAP_LOG_DEBUG("success to open file. [file_name='%s' flag='%s']",
-                   file_name.c_str(), mode);
+    VLOG_NOTICE << "success to open file. "
+            << "file_name=" << file_name << ", mode=" << mode;
     _file_name = file_name;
     return OLAP_SUCCESS;
 }
@@ -308,8 +343,9 @@ OLAPStatus FileHandlerWithBuf::close() {
 
     // 在一些极端情况下(fd可用,但fsync失败)可能造成句柄泄漏
     if (::fclose(_fp) != 0) {
-        OLAP_LOG_WARNING("failed to close file. [err=%m file_name='%s']",
-                         _file_name.c_str());
+        char errmsg[64];
+        LOG(WARNING) << "failed to close file. [err= " << strerror_r(errno, errmsg, 64)
+                     << " file_name='" << _file_name << "']";
         return OLAP_ERR_IO_ERROR;
     }
 
@@ -329,12 +365,15 @@ OLAPStatus FileHandlerWithBuf::read(void* buf, size_t size) {
     if (rd_size == size) {
         return OLAP_SUCCESS;
     } else if (::feof(_fp)) {
-        OLAP_LOG_WARNING("read unenough from file. [err=%m file_name='%s' size=%ld rd_size=%ld]",
-                         _file_name.c_str(), size, rd_size);
+        char errmsg[64];
+        LOG(WARNING) << "read unenough from file. [err=" << strerror_r(errno, errmsg, 64)
+                     << " file_name='" << _file_name << "' size=" << size << " rd_size=" << rd_size
+                     << "]";
         return OLAP_ERR_READ_UNENOUGH;
     } else {
-        OLAP_LOG_WARNING("failed to read from file. [err=%m file_name='%s' size=%ld]",
-                         _file_name.c_str(), size);
+        char errmsg[64];
+        LOG(WARNING) << "failed to read from file. [err=" << strerror_r(errno, errmsg, 64)
+                     << " file_name='" << _file_name << "' size=" << size << "]";
         return OLAP_ERR_IO_ERROR;
     }
 }
@@ -346,8 +385,10 @@ OLAPStatus FileHandlerWithBuf::pread(void* buf, size_t size, size_t offset) {
     }
 
     if (0 != ::fseek(_fp, offset, SEEK_SET)) {
-        OLAP_LOG_WARNING("failed to seek file. [err=%m file_name='%s' size=%ld offset=%ld]",
-                         _file_name.c_str(), size, offset);
+        char errmsg[64];
+        LOG(WARNING) << "failed to seek file. [err= " << strerror_r(errno, errmsg, 64)
+                     << " file_name='" << _file_name << "' size=" << size << " offset=" << offset
+                     << "]";
         return OLAP_ERR_IO_ERROR;
     }
 
@@ -363,8 +404,9 @@ OLAPStatus FileHandlerWithBuf::write(const void* buf, size_t buf_size) {
     size_t wr_size = ::fwrite(buf, 1, buf_size, _fp);
 
     if (wr_size != buf_size) {
-        OLAP_LOG_WARNING("failed to write to file. [err=%m file_name='%s' size=%ld]",
-                         _file_name.c_str(), buf_size);
+        char errmsg[64];
+        LOG(WARNING) << "failed to write to file. [err= " << strerror_r(errno, errmsg, 64)
+                     << " file_name='" << _file_name << "' size=" << buf_size << "]";
         return OLAP_ERR_IO_ERROR;
     }
 
@@ -378,8 +420,10 @@ OLAPStatus FileHandlerWithBuf::pwrite(const void* buf, size_t buf_size, size_t o
     }
 
     if (0 != ::fseek(_fp, offset, SEEK_SET)) {
-        OLAP_LOG_WARNING("failed to seek file. [err=%m file_name='%s' size=%ld offset=%ld]",
-                         _file_name.c_str(), buf_size, offset);
+        char errmsg[64];
+        LOG(WARNING) << "failed to seek file. [err= " << strerror_r(errno, errmsg, 64)
+                     << " file_name='" << _file_name << "' size=" << buf_size
+                     << " offset=" << offset << "]";
         return OLAP_ERR_IO_ERROR;
     }
 
@@ -390,11 +434,11 @@ off_t FileHandlerWithBuf::length() const {
     struct stat stat_data;
 
     if (stat(_file_name.c_str(), &stat_data) < 0) {
-        OLAP_LOG_WARNING("fstat error. [file_name='%s']", _file_name.c_str());
+        LOG(WARNING) << "fstat error. [file_name='" << _file_name << "']";
         return -1;
     }
 
     return stat_data.st_size;
 }
 
-}  // namespace palo
+} // namespace doris

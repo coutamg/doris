@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,31 +15,34 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <iostream>
-#include <gtest/gtest.h>
 #include "runtime/result_sink.h"
-#include "exprs/expr.h"
-#include "exprs/int_literal.h"
+
+#include <gtest/gtest.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <iostream>
+
 #include "exprs/bool_literal.h"
+#include "exprs/expr.h"
 #include "exprs/float_literal.h"
+#include "exprs/int_literal.h"
 #include "exprs/string_literal.h"
 #include "exprs/timestamp_literal.h"
-#include "runtime/primitive_type.h"
-#include "runtime/row_batch.h"
-#include "runtime/tuple_row.h"
-#include "runtime/runtime_state.h"
-#include "runtime/result_buffer_mgr.h"
-#include "runtime/buffer_control_block.h"
-#include "util/mysql_row_buffer.h"
+#include "gen_cpp/Exprs_types.h"
 #include "gen_cpp/PaloInternalService_types.h"
 #include "gen_cpp/Types_types.h"
-#include "gen_cpp/Exprs_types.h"
-#include "util/logging.h"
+#include "runtime/buffer_control_block.h"
+#include "runtime/primitive_type.h"
+#include "runtime/result_buffer_mgr.h"
+#include "runtime/row_batch.h"
+#include "runtime/runtime_state.h"
+#include "runtime/tuple_row.h"
 #include "util/cpu_info.h"
+#include "util/logging.h"
+#include "util/mysql_row_buffer.h"
 
-namespace palo {
+namespace doris {
 
 class ResultSinkTest : public testing::Test {
 public:
@@ -66,13 +66,10 @@ public:
             _exprs.push_back(expr);
         }
     }
-    virtual ~ResultSinkTest() {
-        delete _runtime_state;
-    }
+    virtual ~ResultSinkTest() { delete _runtime_state; }
 
 protected:
-    virtual void SetUp() {
-    }
+    virtual void SetUp() {}
 
 private:
     ExecEnv _exec_env;
@@ -89,20 +86,20 @@ TEST_F(ResultSinkTest, init_normal) {
     row_batch.add_row();
     row_batch.commit_last_row();
     ASSERT_TRUE(sink.send(_runtime_state, &row_batch).ok());
-    ASSERT_TRUE(sink.close(_runtime_state, Status::OK).ok());
+    ASSERT_TRUE(sink.close(_runtime_state, Status::OK()).ok());
 }
 
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
-    palo::init_glog("be-test");
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
-    palo::CpuInfo::init();
+    doris::CpuInfo::init();
     return RUN_ALL_TESTS();
 }
 

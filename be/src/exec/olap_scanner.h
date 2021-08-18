@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,106 +15,150 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_OLAP_SCANNER_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_OLAP_SCANNER_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_OLAP_SCANNER_H
+#define DORIS_BE_SRC_QUERY_EXEC_OLAP_SCANNER_H
 
-#include <boost/scoped_ptr.hpp>
-#include <boost/shared_ptr.hpp>
 #include <list>
-#include <vector>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "common/status.h"
-#include "exec/olap_common.h"
+#include "exec/exec_node.h"
+#include "exec/olap_utils.h"
+#include "exprs/bloomfilter_predicate.h"
 #include "exprs/expr.h"
 #include "gen_cpp/PaloInternalService_types.h"
 #include "gen_cpp/PlanNodes_types.h"
+#include "olap/delete_handler.h"
+#include "olap/olap_cond.h"
+#include "olap/reader.h"
+#include "olap/rowset/column_data.h"
+#include "olap/storage_engine.h"
 #include "runtime/descriptors.h"
 #include "runtime/tuple.h"
 #include "runtime/vectorized_row_batch.h"
 
-namespace palo {
+namespace doris {
 
 class OlapScanNode;
 class OLAPReader;
 class RuntimeProfile;
+class Field;
 
-/**
- * @brief   调用engine_reader读取olap数据
- *          支持读取多个scan_range
- *          并且自动在副本间切换
- */
 class OlapScanner {
 public:
-    /**
-     * @brief   初始化函数.
-     *
-     * @param   scan_range      扫描范围
-     */
-    OlapScanner(
-        RuntimeState* runtime_state,
-        const boost::shared_ptr<PaloScanRange> scan_range,
-        const std::vector<OlapScanRange>& key_ranges,
-        const std::vector<TCondition>& olap_filter,
-        const TupleDescriptor& tuple_desc,
-        RuntimeProfile* profile,
-        const std::vector<TCondition> is_null_vector);
+    OlapScanner(RuntimeState* runtime_state, OlapScanNode* parent, bool aggregation,
+                bool need_agg_finalize, const TPaloScanRange& scan_range,
+                const std::vector<OlapScanRange*>& key_ranges);
 
-    virtual ~OlapScanner();
+    ~OlapScanner();
+
+    Status prepare(const TPaloScanRange& scan_range, const std::vector<OlapScanRange*>& key_ranges,
+                   const std::vector<TCondition>& filters,
+                   const std::vector<std::pair<std::string, std::shared_ptr<IBloomFilterFuncBase>>>&
+                           bloom_filters);
 
     Status open();
 
-    Status get_next(Tuple* tuple, int64_t* raw_rows_read, bool* eof);
+    Status get_batch(RuntimeState* state, RowBatch* batch, bool* eof);
 
     Status close(RuntimeState* state);
 
-    RuntimeState* runtime_state() {
-        return _runtime_state;
+    RuntimeState* runtime_state() { return _runtime_state; }
+
+    std::vector<ExprContext*>* conjunct_ctxs() { return &_conjunct_ctxs; }
+
+    int id() const { return _id; }
+    void set_id(int id) { _id = id; }
+    bool is_open() const { return _is_open; }
+    void set_opened() { _is_open = true; }
+
+    int64_t raw_rows_read() const { return _raw_rows_read; }
+
+    void update_counter();
+
+    const std::string& scan_disk() const { return _tablet->data_dir()->path(); }
+
+    void start_wait_worker_timer() {
+        _watcher.reset();
+        _watcher.start();
     }
 
-    std::vector<ExprContext*>* row_conjunct_ctxs() {
-        return &_row_conjunct_ctxs;
+    int64_t update_wait_worker_timer() { return _watcher.elapsed_time(); }
+
+    void set_use_pushdown_conjuncts(bool has_pushdown_conjuncts) {
+        _use_pushdown_conjuncts = has_pushdown_conjuncts;
     }
 
-    std::vector<ExprContext*>* vec_conjunct_ctxs() {
-        return &_vec_conjunct_ctxs;
-    }
+    std::vector<bool>* mutable_runtime_filter_marks() { return &_runtime_filter_marks; }
 
-    void set_aggregation(bool aggregation) {
-        _aggregation = aggregation;
-    }
+private:
+    Status _init_params(const std::vector<OlapScanRange*>& key_ranges,
+                        const std::vector<TCondition>& filters,
+                        const std::vector<std::pair<string, std::shared_ptr<IBloomFilterFuncBase>>>&
+                                bloom_filters);
+    Status _init_return_columns();
+    void _convert_row_to_tuple(Tuple* tuple);
 
-    void set_id(int id) {
-        _id = id;
-    }
-    int id() {
-        return _id;
-    }
-
-    bool is_open();
-    void set_opened();
+    // Update profile that need to be reported in realtime.
+    void _update_realtime_counter();
 
 private:
     RuntimeState* _runtime_state;
-    const TupleDescriptor& _tuple_desc;      /**< tuple descripter */
-
-    const boost::shared_ptr<PaloScanRange> _scan_range;     /**< 请求的参数信息 */
-    const std::vector<OlapScanRange> _key_ranges;
-    const std::vector<TCondition> _olap_filter;
+    OlapScanNode* _parent;
+    const TupleDescriptor* _tuple_desc; /**< tuple descriptor */
     RuntimeProfile* _profile;
+    const std::vector<SlotDescriptor*>& _string_slots;
+    const std::vector<SlotDescriptor*>& _collection_slots;
 
-    std::vector<ExprContext*> _row_conjunct_ctxs;
-    std::vector<ExprContext*> _vec_conjunct_ctxs;
+    std::vector<ExprContext*> _conjunct_ctxs;
+    // to record which runtime filters have been used
+    std::vector<bool> _runtime_filter_marks;
 
-    std::shared_ptr<OLAPReader> _reader;
-
-    bool _aggregation;
     int _id;
     bool _is_open;
-    std::vector<TCondition> _is_null_vector;
+    bool _aggregation;
+    bool _need_agg_finalize = true;
+    bool _has_update_counter = false;
+
+    int _tuple_idx = 0;
+    int _direct_conjunct_size = 0;
+
+    bool _use_pushdown_conjuncts = false;
+
+    ReaderParams _params;
+    std::unique_ptr<Reader> _reader;
+
+    TabletSharedPtr _tablet;
+    int64_t _version;
+
+    std::vector<uint32_t> _return_columns;
+
+    RowCursor _read_row_cursor;
+
+    std::vector<SlotDescriptor*> _query_slots;
+
+    // time costed and row returned statistics
+    ExecNode::EvalConjunctsFn _eval_conjuncts_fn = nullptr;
+
+    RuntimeProfile::Counter* _rows_read_counter = nullptr;
+    int64_t _num_rows_read = 0;
+    int64_t _raw_rows_read = 0;
+    int64_t _compressed_bytes_read = 0;
+
+    RuntimeProfile::Counter* _rows_pushed_cond_filtered_counter = nullptr;
+    // number rows filtered by pushed condition
+    int64_t _num_rows_pushed_cond_filtered = 0;
+
+    bool _is_closed = false;
+
+    MonotonicStopWatch _watcher;
+
+    std::shared_ptr<MemTracker> _mem_tracker;
 };
 
-} // namespace palo
+} // namespace doris
 
 #endif

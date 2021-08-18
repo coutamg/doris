@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,15 +16,14 @@
 // under the License.
 
 #ifdef IR_COMPILE
+#include "codegen/doris_ir.h"
 #include "runtime/string_value.hpp"
-#include "codegen/palo_ir.h"
 
-namespace palo {
+namespace doris {
 int ir_string_compare(const char* s1, int n1, const char* s2, int n2) {
     return string_compare(s1, n1, s2, n2, std::min(n1, n2));
 }
-}
+} // namespace doris
 #else
 #error "This file should only be used for cross compiling to IR."
 #endif
-

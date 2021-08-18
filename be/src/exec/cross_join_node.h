@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,22 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_CROSS_JOIN_NODE_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_CROSS_JOIN_NODE_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_CROSS_JOIN_NODE_H
+#define DORIS_BE_SRC_QUERY_EXEC_CROSS_JOIN_NODE_H
 
 #include <boost/scoped_ptr.hpp>
-#include <boost/unordered_set.hpp>
 #include <boost/thread.hpp>
 #include <string>
+#include <unordered_set>
 
-#include "exec/exec_node.h"
 #include "exec/blocking_join_node.h"
+#include "exec/exec_node.h"
 #include "exec/row_batch_list.h"
+#include "gen_cpp/PlanNodes_types.h"
 #include "runtime/descriptors.h"
 #include "runtime/mem_pool.h"
-#include "gen_cpp/PlanNodes_types.h"
 
-namespace palo {
+namespace doris {
 
 class RowBatch;
 class TupleRow;
@@ -76,6 +73,6 @@ private:
     std::string build_list_debug_string();
 };
 
-}
+} // namespace doris
 
 #endif

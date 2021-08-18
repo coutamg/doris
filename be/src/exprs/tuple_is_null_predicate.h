@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,18 +15,19 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_TUPLE_IS_NULL_PREDICATE_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_TUPLE_IS_NULL_PREDICATE_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_TUPLE_IS_NULL_PREDICATE_H
+#define DORIS_BE_SRC_QUERY_EXPRS_TUPLE_IS_NULL_PREDICATE_H
 
+#include "common/object_pool.h"
 #include "exprs/predicate.h"
 
-namespace palo {
+namespace doris {
 
 class TExprNode;
 
-class TupleIsNullPredicate: public Predicate {
+class TupleIsNullPredicate : public Predicate {
 public:
-    virtual Expr* clone(ObjectPool* pool) const override { 
+    virtual Expr* clone(ObjectPool* pool) const override {
         return pool->add(new TupleIsNullPredicate(*this));
     }
 
@@ -38,10 +36,8 @@ protected:
 
     TupleIsNullPredicate(const TExprNode& node);
 
-    virtual Status prepare(
-        RuntimeState* state, const RowDescriptor& row_desc, ExprContext* ctx);
+    virtual Status prepare(RuntimeState* state, const RowDescriptor& row_desc, ExprContext* ctx);
 
-    virtual Status get_codegend_compute_fn(RuntimeState* state, llvm::Function** fn) override;
     virtual BooleanVal get_boolean_val(ExprContext* ctx, TupleRow* row);
     virtual std::string debug_string() const;
 
@@ -50,6 +46,6 @@ private:
     std::vector<int32_t> _tuple_idxs;
 };
 
-}
+} // namespace doris
 
 #endif

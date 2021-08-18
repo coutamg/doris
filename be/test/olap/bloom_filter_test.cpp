@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,17 +15,18 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include "olap/bloom_filter.hpp"
+
 #include <gtest/gtest.h>
 
 #include <string>
 
-#include "olap/column_file/bloom_filter.hpp"
+#include "common/configbase.h"
 #include "util/logging.h"
 
 using std::string;
 
-namespace palo {
-namespace column_file {
+namespace doris {
 
 class TestBloomFilter : public testing::Test {
 public:
@@ -76,6 +75,7 @@ TEST_F(TestBloomFilter, init_bloom_filter) {
         ASSERT_EQ(0, bf.bit_num());
         ASSERT_EQ(0, bf.hash_function_num());
         ASSERT_EQ(NULL, bf.bit_set_data());
+        delete[] data;
     }
 }
 
@@ -85,14 +85,14 @@ TEST_F(TestBloomFilter, add_and_test_bytes) {
     BloomFilter bf;
     bf.init(1024);
 
-    bf.add_bytes(NULL, 0);
-    ASSERT_TRUE(bf.test_bytes(NULL, 0));
+    bf.add_bytes(nullptr, 0);
+    ASSERT_TRUE(bf.test_bytes(nullptr, 0));
 
     bytes = "hello";
     bf.add_bytes(bytes.c_str(), bytes.size());
     ASSERT_TRUE(bf.test_bytes(bytes.c_str(), bytes.size()));
 
-    bytes = "palo";
+    bytes = "doris";
     bf.add_bytes(bytes.c_str(), bytes.size());
     ASSERT_TRUE(bf.test_bytes(bytes.c_str(), bytes.size()));
 
@@ -111,60 +111,54 @@ TEST_F(TestBloomFilter, bloom_filter_info) {
     BloomFilter bf;
     bf.init(8, 0.1);
 
-    bytes = "palo";
+    bytes = "doris";
     bf.add_bytes(bytes.c_str(), bytes.size());
-    string buffer_expect = "bit_num:64 hash_function_num:6 "
-            "bit_set:0000000000000000101000000000000000000010100000000000000000101000";
+    string buffer_expect =
+            "bit_num:64 hash_function_num:6 "
+            "bit_set:0000100000000000100000010000000000010000001000000000000000000100";
     string buffer = bf.to_string();
     ASSERT_TRUE(buffer_expect == buffer);
 
-    string points_expect = "58-16-38-60-18-40";
+    string points_expect = "4-23-42-61-16-35";
     string points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
     ASSERT_TRUE(points_expect == points);
 
     bytes = "a";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 
     bytes = "ab";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 
     bytes = "b";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 
     bytes = "ba";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 
     bytes = "c";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 
     bytes = "bc";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 
     bytes = "ac";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 
     bytes = "abc";
     points = bf.get_bytes_points_string(bytes.c_str(), bytes.size());
-    OLAP_LOG_WARNING("bytes=%s points=%s", bytes.c_str(), points.c_str());
+    LOG(WARNING) << "bytes=" << bytes << " points=" << points;
 }
 
-} // namespace column_file
-} // namespace palo
+} // namespace doris
 
-int main(int argc, char **argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
-        fprintf(stderr, "error read config file. \n");
-        return -1;
-    }
-    palo::init_glog("be-test");
+int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,27 +15,27 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef IMPALA_RUNTIME_RESERVATION_TRACKER_COUNTERS_H
-#define IMPALA_RUNTIME_RESERVATION_TRACKER_COUNTERS_H
+#ifndef DORIS_BE_RUNTIME_RESERVATION_TRACKER_COUNTERS_H
+#define DORIS_BE_RUNTIME_RESERVATION_TRACKER_COUNTERS_H
 
 #include "util/runtime_profile.h"
 
-namespace palo {
+namespace doris {
 
 /// A set of counters for each ReservationTracker for reporting purposes.
 ///
 /// If the ReservationTracker is linked to a profile these have the same lifetime as that
 /// profile, otherwise they have the same lifetime as the ReservationTracker itself.
 struct ReservationTrackerCounters {
-  /// The tracker's peak reservation in bytes.
-  RuntimeProfile::HighWaterMarkCounter* peak_reservation;
+    /// The tracker's peak reservation in bytes.
+    RuntimeProfile::HighWaterMarkCounter* peak_reservation;
 
-  /// The tracker's peak usage in bytes.
-  RuntimeProfile::HighWaterMarkCounter* peak_used_reservation;
+    /// The tracker's peak usage in bytes.
+    RuntimeProfile::HighWaterMarkCounter* peak_used_reservation;
 
-  /// The hard limit on the tracker's reservations
-  RuntimeProfile::Counter* reservation_limit;
+    /// The hard limit on the tracker's reservations
+    RuntimeProfile::Counter* reservation_limit;
 };
-}
+} // namespace doris
 
 #endif

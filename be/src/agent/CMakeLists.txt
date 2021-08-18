@@ -1,5 +1,3 @@
-# Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -25,8 +23,6 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/src/agent")
   
 add_library(Agent STATIC
     agent_server.cpp
-    pusher.cpp
-    file_downloader.cpp
     heartbeat_server.cpp
     task_worker_pool.cpp
     utils.cpp
@@ -34,5 +30,3 @@ add_library(Agent STATIC
     topic_subscriber.cpp
     user_resource_listener.cpp
 )
-
-

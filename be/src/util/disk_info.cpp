@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,20 +17,22 @@
 
 #include "util/disk_info.h"
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <unistd.h>
-#include <sys/vfs.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <sys/types.h>
+#include <sys/vfs.h>
+#include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 
-#include "util/debug_util.h"
+#include "gutil/strings/split.h"
+#include "util/file_utils.h"
 
-namespace palo {
+namespace doris {
 
 bool DiskInfo::_s_initialized;
 std::vector<DiskInfo::Disk> DiskInfo::_s_disks;
@@ -56,8 +55,7 @@ void DiskInfo::get_device_names() {
         getline(partitions, line);
         boost::trim(line);
 
-        std::vector<std::string> fields;
-        boost::split(fields, line, boost::is_any_of(" "), boost::token_compress_on);
+        std::vector<std::string> fields = strings::Split(line, " ", strings::SkipWhitespace());
 
         if (fields.size() != 4) {
             continue;
@@ -159,4 +157,70 @@ std::string DiskInfo::debug_string() {
     return stream.str();
 }
 
+Status DiskInfo::get_disk_devices(const std::vector<std::string>& paths,
+                                  std::set<std::string>* devices) {
+    std::vector<std::string> real_paths;
+    for (auto& path : paths) {
+        std::string p;
+        WARN_IF_ERROR(FileUtils::canonicalize(path, &p),
+                      "canonicalize path " + path + " failed, skip disk monitoring of this path");
+        real_paths.emplace_back(std::move(p));
+    }
+
+    FILE* fp = fopen("/proc/mounts", "r");
+    if (fp == nullptr) {
+        std::stringstream ss;
+        char buf[64];
+        ss << "open /proc/mounts failed, errno:" << errno
+           << ", message:" << strerror_r(errno, buf, 64);
+        LOG(WARNING) << ss.str();
+        return Status::InternalError(ss.str());
+    }
+
+    Status status;
+    char* line_ptr = 0;
+    size_t line_buf_size = 0;
+    for (auto& path : real_paths) {
+        size_t max_mount_size = 0;
+        std::string match_dev;
+        rewind(fp);
+        while (getline(&line_ptr, &line_buf_size, fp) > 0) {
+            char dev_path[4096];
+            char mount_path[4096];
+            int num = sscanf(line_ptr, "%4095s %4095s", dev_path, mount_path);
+            if (num < 2) {
+                continue;
+            }
+            size_t mount_size = strlen(mount_path);
+            if (mount_size < max_mount_size || path.size() < mount_size ||
+                strncmp(path.c_str(), mount_path, mount_size) != 0) {
+                continue;
+            }
+            std::string dev(basename(dev_path));
+            boost::trim_right_if(dev, boost::is_any_of("0123456789"));
+            if (_s_disk_name_to_disk_id.find(dev) != std::end(_s_disk_name_to_disk_id)) {
+                max_mount_size = mount_size;
+                match_dev = dev;
+            }
+        }
+        if (ferror(fp) != 0) {
+            std::stringstream ss;
+            char buf[64];
+            ss << "open /proc/mounts failed, errno:" << errno
+               << ", message:" << strerror_r(errno, buf, 64);
+            LOG(WARNING) << ss.str();
+            status = Status::InternalError(ss.str());
+            break;
+        }
+        if (max_mount_size > 0) {
+            devices->emplace(match_dev);
+        }
+    }
+    if (line_ptr != nullptr) {
+        free(line_ptr);
+    }
+    fclose(fp);
+    return status;
 }
+
+} // namespace doris

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_TEXT_CONVERTER_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_TEXT_CONVERTER_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_TEXT_CONVERTER_H
+#define DORIS_BE_SRC_QUERY_EXEC_TEXT_CONVERTER_H
 
 #include "runtime/runtime_state.h"
 
-namespace palo {
+namespace doris {
 
 class MemPool;
 class SlotDescriptor;
@@ -48,13 +45,13 @@ public:
     // 'pool' is unused.
     // Unsuccessful conversions are turned into NULLs.
     // Returns true if the value was written successfully.
-    bool write_slot(const SlotDescriptor* slot_desc, Tuple* tuple,
-                   const char* data, int len, bool copy_string, bool need_escape, MemPool* pool);
+    bool write_slot(const SlotDescriptor* slot_desc, Tuple* tuple, const char* data, int len,
+                    bool copy_string, bool need_escape, MemPool* pool);
 
     // Removes escape characters from len characters of the null-terminated string src,
     // and copies the unescaped string into dest, changing *len to the unescaped length.
     // No null-terminator is added to dest.
-    void unescape_string(const char* src, char* dest, int* len);
+    void unescape_string(const char* src, char* dest, size_t* len);
 
     // Removes escape characters from 'str', allocating a new string from pool.
     // 'str' is updated with the new ptr and length.
@@ -64,6 +61,6 @@ private:
     char _escape_char;
 };
 
-}
+} // namespace doris
 
 #endif

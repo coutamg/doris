@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,16 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_MERGE_NODE_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_MERGE_NODE_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_MERGE_NODE_H
+#define DORIS_BE_SRC_QUERY_EXEC_MERGE_NODE_H
 
 #include <boost/scoped_ptr.hpp>
 
 #include "exec/exec_node.h"
 #include "runtime/mem_pool.h"
-#include <boost/scoped_ptr.hpp>
 
-namespace palo {
+namespace doris {
 
 class Tuple;
 class TupleRow;
@@ -39,10 +35,10 @@ class TupleRow;
 class MergeNode : public ExecNode {
 public:
     MergeNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
-    virtual ~MergeNode() { }
+    virtual ~MergeNode() {}
 
     // Create const exprs, child exprs and conjuncts from corresponding thrift exprs.
-    virtual Status init(const TPlanNode& tnode);
+    virtual Status init(const TPlanNode& tnode, RuntimeState* state = nullptr);
     virtual Status prepare(RuntimeState* state);
     virtual Status open(RuntimeState* state);
     virtual Status get_next(RuntimeState* state, RowBatch* row_batch, bool* eos);
@@ -61,10 +57,10 @@ private:
     std::vector<SlotDescriptor*> _materialized_slots;
 
     // Const exprs materialized by this node. These exprs don't refer to any children.
-    std::vector<std::vector<ExprContext*> > _const_result_expr_ctx_lists;
+    std::vector<std::vector<ExprContext*>> _const_result_expr_ctx_lists;
 
     // Exprs materialized by this node. The i-th result expr list refers to the i-th child.
-    std::vector<std::vector<ExprContext*> > _result_expr_ctx_lists;
+    std::vector<std::vector<ExprContext*>> _result_expr_ctx_lists;
 
     // Index of current const result expr list.
     int _const_result_expr_idx;
@@ -91,9 +87,9 @@ private:
     // Returns true if row_batch should be returned to caller or limit has been
     // reached, false otherwise.
     bool eval_and_materialize_exprs(const std::vector<ExprContext*>& exprs, bool const_exprs,
-                                 Tuple** tuple, RowBatch* row_batch);
+                                    Tuple** tuple, RowBatch* row_batch);
 };
 
-}
+} // namespace doris
 
 #endif

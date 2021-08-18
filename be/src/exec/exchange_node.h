@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,17 +15,19 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_EXCHANGE_NODE_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_EXCHANGE_NODE_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_EXCHANGE_NODE_H
+#define DORIS_BE_SRC_QUERY_EXEC_EXCHANGE_NODE_H
 
 #include <boost/scoped_ptr.hpp>
+
 #include "exec/exec_node.h"
 #include "exec/sort_exec_exprs.h"
+#include "runtime/data_stream_recvr.h"
 
-namespace palo {
+namespace doris {
 
 class RowBatch;
-class DataStreamRecvr;
+class RuntimeProfile;
 
 // Receiver node for data streams. The data stream receiver is created in Prepare()
 // and closed in Close().
@@ -46,18 +45,17 @@ public:
     ExchangeNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
     virtual ~ExchangeNode() {}
 
-    virtual Status init(const TPlanNode& tnode);
+    virtual Status init(const TPlanNode& tnode, RuntimeState* state = nullptr);
     virtual Status prepare(RuntimeState* state);
     // Blocks until the first batch is available for consumption via GetNext().
     virtual Status open(RuntimeState* state);
     virtual Status get_next(RuntimeState* state, RowBatch* row_batch, bool* eos);
+    Status collect_query_statistics(QueryStatistics* statistics) override;
     virtual Status close(RuntimeState* state);
 
     // the number of senders needs to be set after the c'tor, because it's not
     // recorded in TPlanNode, and before calling prepare()
-    void set_num_senders(int num_senders) {
-        _num_senders = num_senders;
-    }
+    void set_num_senders(int num_senders) { _num_senders = num_senders; }
 
 protected:
     virtual void debug_string(int indentation_level, std::stringstream* out) const;
@@ -71,7 +69,7 @@ private:
     // Only used when _is_merging is false.
     Status fill_input_row_batch(RuntimeState* state);
 
-    int _num_senders;  // needed for _stream_recvr construction
+    int _num_senders; // needed for _stream_recvr construction
 
     // created in prepare() and owned by the RuntimeState
     boost::shared_ptr<DataStreamRecvr> _stream_recvr;
@@ -85,7 +83,7 @@ private:
     // Only valid if _is_merging is false. (If _is_merging is true, GetNext() is
     // delegated to the receiver). Owned by the stream receiver.
     // boost::scoped_ptr<RowBatch> _input_batch;
-    RowBatch* _input_batch;
+    RowBatch* _input_batch = nullptr;
 
     // Next row to copy from _input_batch. For non-merging exchanges, _input_batch
     // is retrieved directly from the sender queue in the stream recvr, and rows from
@@ -109,9 +107,13 @@ private:
 
     // Number of rows skipped so far.
     int64_t _num_rows_skipped;
+
+    // Sub plan query statistics receiver. It is shared with DataStreamRecvr and will be
+    // called in two different threads. When ExchangeNode is destructed, this may be accessed
+    // by recvr thread in DataStreamMgr's transmit_data.
+    std::shared_ptr<QueryStatisticsRecvr> _sub_plan_query_statistics_recvr;
 };
 
-};
+}; // namespace doris
 
 #endif
-

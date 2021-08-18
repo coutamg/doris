@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,19 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_DEFAULT_PATH_HANDLERS_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_DEFAULT_PATH_HANDLERS_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_DEFAULT_PATH_HANDLERS_H
+#define DORIS_BE_SRC_COMMON_UTIL_DEFAULT_PATH_HANDLERS_H
 
 #include <stdio.h>
 
-namespace palo {
+#include <memory>
+
+namespace doris {
 
 class MemTracker;
 class WebPageHandler;
 
 // Adds a set of default path handlers to the webserver to display
 // logs and configuration flags
-void add_default_path_handlers(WebPageHandler* web_page_handler, MemTracker* process_mem_tracker);
-}
+void add_default_path_handlers(WebPageHandler* web_page_handler,
+                               const std::shared_ptr<MemTracker>& process_mem_tracker);
+} // namespace doris
 
 #endif // IMPALA_UTIL_DEFAULT_PATH_HANDLERS_H

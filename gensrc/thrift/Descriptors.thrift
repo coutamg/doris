@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-namespace cpp palo
-namespace java com.baidu.palo.thrift
+namespace cpp doris
+namespace java org.apache.doris.thrift
 
 include "Types.thrift"
 include "Exprs.thrift"
@@ -35,6 +32,14 @@ struct TSlotDescriptor {
   8: required string colName;
   9: required i32 slotIdx
   10: required bool isMaterialized
+}
+
+struct TTupleDescriptor {
+  1: required Types.TTupleId id
+  2: required i32 byteSize
+  3: required i32 numNullBytes
+  4: optional Types.TTableId tableId
+  5: optional i32 numNullSlots
 }
 
 enum THdfsFileFormat {
@@ -94,6 +99,10 @@ enum THdfsCompression {
   SNAPPY_BLOCKED // Used by sequence and rc files but not stored in the metadata.
 }
 
+enum TIndexType {
+  BITMAP
+}
+
 // Mapping from names defined by Avro to the enum.
 // We permit gzip and bzip2 in addition.
 const map<string, THdfsCompression> COMPRESSION_MAP = {
@@ -105,8 +114,97 @@ const map<string, THdfsCompression> COMPRESSION_MAP = {
   "snappy": THdfsCompression.SNAPPY
 }
 
+struct TOlapTableIndexTablets {
+    1: required i64 index_id
+    2: required list<i64> tablets
+}
+
+// its a closed-open range
+struct TOlapTablePartition {
+    1: required i64 id
+    // deprecated, use 'start_keys' and 'end_keys' instead
+    2: optional Exprs.TExprNode start_key
+    3: optional Exprs.TExprNode end_key
+
+    // how many tablets in one partition
+    4: required i32 num_buckets
+
+    5: required list<TOlapTableIndexTablets> indexes
+
+    6: optional list<Exprs.TExprNode> start_keys
+    7: optional list<Exprs.TExprNode> end_keys
+    8: optional list<list<Exprs.TExprNode>> in_keys
+}
+
+struct TOlapTablePartitionParam {
+    1: required i64 db_id
+    2: required i64 table_id
+    3: required i64 version
+
+    // used to split a logical table to multiple paritions
+    // deprecated, use 'partition_columns' instead
+    4: optional string partition_column
+
+    // used to split a partition to multiple tablets
+    5: optional list<string> distributed_columns
+
+    // partitions
+    6: required list<TOlapTablePartition> partitions
+
+    7: optional list<string> partition_columns
+}
+
+struct TOlapTableIndexSchema {
+    1: required i64 id
+    2: required list<string> columns
+    3: required i32 schema_hash
+}
+
+struct TOlapTableSchemaParam {
+    1: required i64 db_id
+    2: required i64 table_id
+    3: required i64 version
+
+    // Logical columns, contain all column that in logical table
+    4: required list<TSlotDescriptor> slot_descs
+    5: required TTupleDescriptor tuple_desc
+    6: required list<TOlapTableIndexSchema> indexes
+}
+
+struct TOlapTableIndex {
+  1: optional string index_name
+  2: optional list<string> columns
+  3: optional TIndexType index_type
+  4: optional string comment
+}
+
+struct TTabletLocation {
+    1: required i64 tablet_id
+    2: required list<i64> node_ids
+}
+
+struct TOlapTableLocationParam {
+    1: required i64 db_id
+    2: required i64 table_id
+    3: required i64 version
+    4: required list<TTabletLocation> tablets
+}
+
+struct TNodeInfo {
+    1: required i64 id
+    2: required i64 option
+    3: required string host
+    // used to transfer data between nodes
+    4: required i32 async_internal_port
+}
+
+struct TPaloNodesInfo {
+    1: required i64 version
+    2: required list<TNodeInfo> nodes
+}
+
 struct TOlapTable {
-  1: required string tableName
+    1: required string tableName
 }
 
 struct TMySQLTable {
@@ -118,43 +216,18 @@ struct TMySQLTable {
   6: required string table
 }
 
-// Parameters needed for hash partitioning
-struct TKuduPartitionByHashParam {
-  1: required list<string> columns
-  2: required i32 num_partitions
+struct TOdbcTable {
+  1: optional string host
+  2: optional string port
+  3: optional string user
+  4: optional string passwd
+  5: optional string db
+  6: optional string table
+  7: optional string driver
+  8: optional Types.TOdbcTableType type
 }
 
-struct TKuduRangePartition {
-  1: optional list<Exprs.TExpr> lower_bound_values
-  2: optional bool is_lower_bound_inclusive
-  3: optional list<Exprs.TExpr> upper_bound_values
-  4: optional bool is_upper_bound_inclusive
-}
-
-// A range partitioning is identified by a list of columns and a list of range partitions.
-struct TKuduPartitionByRangeParam {
-  1: required list<string> columns
-  2: optional list<TKuduRangePartition> range_partitions
-}
-
-// Parameters for the PARTITION BY clause.
-struct TKuduPartitionParam {
-  1: optional TKuduPartitionByHashParam by_hash_param;
-  2: optional TKuduPartitionByRangeParam by_range_param;
-}
-
-// Represents a Kudu table
-struct TKuduTable {
-  1: required string table_name
-
-  // Network address of a master host in the form of 0.0.0.0:port
-  2: required list<string> master_addresses
-
-  // Name of the key columns
-  3: required list<string> key_columns
-
-  // Partitioning
-  4: required list<TKuduPartitionParam> partition_by
+struct TEsTable {
 }
 
 struct TSchemaTable {
@@ -179,16 +252,9 @@ struct TTableDescriptor {
   10: optional TMySQLTable mysqlTable
   11: optional TOlapTable olapTable
   12: optional TSchemaTable schemaTable
-  13: optional TKuduTable kuduTable
   14: optional TBrokerTable BrokerTable
-}
-
-struct TTupleDescriptor {
-  1: required Types.TTupleId id
-  2: required i32 byteSize
-  3: required i32 numNullBytes
-  4: optional Types.TTableId tableId
-  5: optional i32 numNullSlots
+  15: optional TEsTable esTable
+  16: optional TOdbcTable odbcTable
 }
 
 struct TDescriptorTable {

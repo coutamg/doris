@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,10 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <algorithm>
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
 #include "agent/utils.h"
+
+#include <algorithm>
+
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "service/backend_options.h"
 #include "util/logging.h"
 
 using ::testing::_;
@@ -28,25 +29,18 @@ using ::testing::Return;
 using ::testing::SetArgPointee;
 using std::string;
 
-namespace palo {
+namespace doris {
 
 TEST(AgentUtilsTest, Test) {
-    char* host_name;
-    AgentUtils agent_utils;
-    host_name = agent_utils.get_local_ip();
-    int cnt = std::count(host_name, host_name + 17, '.');
-    EXPECT_EQ(3, cnt);
+    std::string host_name = BackendOptions::get_localhost();
+    int cnt = std::count(host_name.begin(), host_name.end(), '.');
+    ASSERT_EQ(3, cnt);
 }
 
-}  // namespace palo
+} // namespace doris
 
-int main(int argc, char **argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
-        fprintf(stderr, "error read config file. \n");
-        return -1;
-    }
-    palo::init_glog("be-test");
+int main(int argc, char** argv) {
+    doris::BackendOptions::init();
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

@@ -1,5 +1,5 @@
-# Modifications copyright (C) 2017, Baidu.com, Inc.
-# Copyright 2017 The Apache Software Foundation
+#!/usr/bin/env python
+# encoding: utf-8
 
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -287,7 +287,7 @@ types = {
   'STRING': ['VARCHAR'],
   'DATE': ['DATE'],
   'DATETIME': ['DATETIME'],
-  'DECIMAL': ['DECIMAL'],
+  'DECIMALV2': ['DECIMALV2'],
   'NATIVE_INT_TYPES': ['TINYINT', 'SMALLINT', 'INT', 'BIGINT'],
   'INT_TYPES': ['TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LARGEINT'],
   'FLOAT_TYPES': ['FLOAT', 'DOUBLE'],
@@ -295,8 +295,8 @@ types = {
   'NATIVE_TYPES': ['BOOLEAN', 'TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'FLOAT', 'DOUBLE'],
   'STRCAST_TYPES': ['BOOLEAN', 'SMALLINT', 'INT', 'BIGINT', 'FLOAT', 'DOUBLE'],
   'ALL_TYPES': ['BOOLEAN', 'TINYINT', 'SMALLINT', 'INT', 'BIGINT', 'LARGEINT', 'FLOAT',\
-                     'DOUBLE', 'VARCHAR', 'DATETIME', 'DECIMAL'],
-  'MAX_TYPES': ['BIGINT', 'LARGEINT', 'DOUBLE', 'DECIMAL'],
+                     'DOUBLE', 'VARCHAR', 'DATETIME', 'DECIMALV2'],
+  'MAX_TYPES': ['BIGINT', 'LARGEINT', 'DOUBLE', 'DECIMALV2'],
 }
 
 # Operation, [ReturnType], [[Args1], [Args2], ... [ArgsN]]
@@ -325,7 +325,7 @@ native_types = {
   'VARCHAR': 'StringValue',
   'DATE': 'DateTimeValue',
   'DATETIME': 'DateTimeValue',
-  'DECIMAL': 'DecimalValue',
+  'DECIMALV2': 'DecimalV2Value',
 }
 
 # Portable type used in the function implementation
@@ -341,7 +341,7 @@ implemented_types = {
   'VARCHAR': 'StringValue',
   'DATE': 'DateTimeValue',
   'DATETIME': 'DateTimeValue',
-  'DECIMAL': 'DecimalValue',
+  'DECIMALV2': 'DecimalV2Value',
 }
 
 native_ops = {
@@ -385,12 +385,6 @@ native_funcs = {
 }
 
 cc_preamble = '\
-/***************************************************************************\n\
- * \n\
- * Copyright (c) 2014 Baidu.com, Inc. All Rights Reserved\n\
- * \n\
- **************************************************************************/\n\
-\n\
 // This is a generated file, DO NOT EDIT IT.\n\
 // To add new functions, see impala/common/function-registry/gen_vector_functions.py\n\
 \n\
@@ -406,26 +400,20 @@ cc_preamble = '\
 using namespace boost;\n\
 using namespace std;\n\
 \n\
-namespace palo { \n\
+namespace doris { \n\
 \n'
 
 cc_epilogue = '\
 }\n'
 
 h_preamble = '\
-/***************************************************************************\n\
- * \n\
- * Copyright (c) 2014 Baidu.com, Inc. All Rights Reserved\n\
- * \n\
- **************************************************************************/\n\
-\n\
 // This is a generated file, DO NOT EDIT IT.\n\
 // To add new functions, see impala/common/function-registry/gen_vector_functions.py\n\
 \n\
-#ifndef BDG_PALO_OPCODE_VECTOR_FUNCTIONS_H\n\
-#define BDG_PALO_OPCODE_VECTOR_FUNCTIONS_H\n\
+#ifndef DORIS_OPCODE_VECTOR_FUNCTIONS_H\n\
+#define DORIS_OPCODE_VECTOR_FUNCTIONS_H\n\
 \n\
-namespace palo {\n\
+namespace doris {\n\
 class Expr;\n\
 class OpcodeRegistry;\n\
 class VectorizedRowBatch;\n\
@@ -442,19 +430,21 @@ h_epilogue = '\
 
 python_preamble = '\
 #!/usr/bin/env python\n\
-# Copyright 2012 Cloudera Inc.\n\
-#\n\
-# Licensed under the Apache License, Version 2.0 (the "License");\n\
-# you may not use this file except in compliance with the License.\n\
-# You may obtain a copy of the License at\n\
-#\n\
-# http://www.apache.org/licenses/LICENSE-2.0\n\
-#\n\
-# Unless required by applicable law or agreed to in writing, software\n\
-# distributed under the License is distributed on an "AS IS" BASIS,\n\
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n\
-# See the License for the specific language governing permissions and\n\
-# limitations under the License.\n\
+# Licensed to the Apache Software Foundation (ASF) under one \n\
+# or more contributor license agreements.  See the NOTICE file \n\
+# distributed with this work for additional information \n\
+# regarding copyright ownership.  The ASF licenses this file \n\
+# to you under the Apache License, Version 2.0 (the \n\
+# "License"); you may not use this file except in compliance \n\
+# with the License.  You may obtain a copy of the License at \n\
+# \n\
+#  http://www.apache.org/licenses/LICENSE-2.0\n\
+# \n\
+#  Unless required by applicable law or agreed to in writing, software\n\
+#  distributed under the License is distributed on an "AS IS" BASIS,\n\
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n\
+#  See the License for the specific language governing permissions and\n\
+#  limitations under the License.\n\
 \n\
 # This is a generated file, DO NOT EDIT IT.\n\
 # To add new functions, see impala/common/function-registry/gen_opcodes.py\n\
@@ -497,7 +487,7 @@ if __name__ == "__main__":
     h_file.write(h_preamble)
     cc_file.write(cc_preamble)
     python_file.write(python_preamble)
-    
+
     # Generate functions and headers
     for func_data in functions:
         op = func_data[0]
@@ -509,7 +499,7 @@ if __name__ == "__main__":
             if not op in templates:
                 continue
             template = templates[op]
-        
+
         # Expand all arguments
         return_types = []
         for ret in func_data[1]:
@@ -522,46 +512,46 @@ if __name__ == "__main__":
                 for t in types[arg]:
                     expanded_arg.append(t)
             signatures.append(expanded_arg)
-        
+
         # Put arguments into substitution structure
         num_functions = 0
         for args in signatures:
             num_functions = max(num_functions, len(args))
         num_functions = max(num_functions, len(return_types))
         num_args = len(signatures)
-        
+
         # Validate the input is correct
         if len(return_types) != 1 and len(return_types) != num_functions:
-            print "Invalid Declaration: " + func_data
+            print("Invalid Declaration: " + func_data)
             sys.exit(1)
-        
+
         for args in signatures:
             if len(args) != 1 and len(args) != num_functions:
-                print "Invalid Declaration: " + func_data
+                print("Invalid Declaration: " + func_data)
                 sys.exit(1)
-        
+
         # Iterate over every function signature to generate
         for i in range(0, num_functions):
             if len(return_types) == 1:
                 return_type = return_types[0]
             else:
                 return_type = return_types[i]
-        
+
             arg_types = []
             for j in range(0, num_args):
                 if len(signatures[j]) == 1:
                     arg_types.append(signatures[j][0])
                 else:
                     arg_types.append(signatures[j][i])
-            
+
             # At this point, 'return_type' is a single type and 'arg_types'
             # is a list of single types
             sub = initialize_sub(op, return_type, arg_types)
-            
+
             h_file.write(header_template.substitute(sub))
             cc_file.write(template.substitute(sub))
             python_file.write(python_template.substitute(sub))
-    
+
     h_file.write(h_epilogue)
     cc_file.write(cc_epilogue)
     python_file.write(python_epilogue)

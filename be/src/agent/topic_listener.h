@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,25 +15,23 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_AGENT_TOPIC_LISTENER_H
-#define BDG_PALO_BE_SRC_AGENT_TOPIC_LISTENER_H
+#ifndef DORIS_BE_SRC_AGENT_TOPIC_LISTENER_H
+#define DORIS_BE_SRC_AGENT_TOPIC_LISTENER_H
 
 #include "gen_cpp/AgentService_types.h"
 
-namespace palo {
-  
-class TopicListener {
+namespace doris {
 
+class TopicListener {
 public:
-    
-    virtual ~TopicListener(){}
+    virtual ~TopicListener() {}
     // Deal with a single update
     //
     // Input parameters:
     //   protocol version: the version for the protocol, listeners should deal with the msg according to the protocol
     //   topic_update: single update
-    virtual void handle_update(const TAgentServiceVersion::type& protocol_version, 
+    virtual void handle_update(const TAgentServiceVersion::type& protocol_version,
                                const TTopicUpdate& topic_update) = 0;
 };
-}
+} // namespace doris
 #endif

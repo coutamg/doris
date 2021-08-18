@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,22 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_UTIL_REST_MONITOR_IFACE_H
-#define BDG_PALO_BE_UTIL_REST_MONITOR_IFACE_H
+#ifndef DORIS_BE_UTIL_REST_MONITOR_IFACE_H
+#define DORIS_BE_UTIL_REST_MONITOR_IFACE_H
 
 #include <sstream>
 
-namespace palo {
+namespace doris {
 
 // This is a interface used to monitor internal module running state.
 class RestMonitorIface {
 public:
-    virtual ~RestMonitorIface() { }
+    virtual ~RestMonitorIface() {}
 
     // this is called when client want to know it's content
     virtual void debug(std::stringstream& ss) = 0;
 };
 
-}
+} // namespace doris
 
 #endif

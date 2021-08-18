@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,13 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef INF_PALO_QE_SRC_BE_EXEC_SORT_EXEC_EXPRS_H
-#define INF_PALO_QE_SRC_BE_EXEC_SORT_EXEC_EXPRS_H
+#ifndef INF_DORIS_QE_SRC_BE_EXEC_SORT_EXEC_EXPRS_H
+#define INF_DORIS_QE_SRC_BE_EXEC_SORT_EXEC_EXPRS_H
 
 #include "exprs/expr.h"
 #include "runtime/runtime_state.h"
 
-namespace palo {
+namespace doris {
 
 class MemTracker;
 
@@ -47,7 +44,8 @@ public:
 
     // prepare all expressions used for sorting and tuple materialization.
     Status prepare(RuntimeState* state, const RowDescriptor& child_row_desc,
-                   const RowDescriptor& output_row_desc, MemTracker* mem_tracker);
+                   const RowDescriptor& output_row_desc,
+                   const std::shared_ptr<MemTracker>& mem_tracker);
 
     // open all expressions used for sorting and tuple materialization.
     Status open(RuntimeState* state);
@@ -86,9 +84,9 @@ private:
     // Prepare(), Open(), and Close() on input ExprContexts (instead of calling the
     // analogous functions in this class). Used for testing.
     Status init(const std::vector<ExprContext*>& lhs_ordering_expr_ctxs,
-            const std::vector<ExprContext*>& rhs_ordering_expr_ctxs);
+                const std::vector<ExprContext*>& rhs_ordering_expr_ctxs);
 };
 
-}
+} // namespace doris
 
 #endif

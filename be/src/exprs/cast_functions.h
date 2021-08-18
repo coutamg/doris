@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_CAST_FUNCTIONS_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_CAST_FUNCTIONS_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_CAST_FUNCTIONS_H
+#define DORIS_BE_SRC_QUERY_EXPRS_CAST_FUNCTIONS_H
 
 #include "udf/udf.h"
 
-namespace palo {
+namespace doris {
 
 class CastFunctions {
 public:
@@ -36,7 +33,7 @@ public:
     static BooleanVal cast_to_boolean_val(FunctionContext* context, const LargeIntVal& val);
     static BooleanVal cast_to_boolean_val(FunctionContext* context, const FloatVal& val);
     static BooleanVal cast_to_boolean_val(FunctionContext* context, const DoubleVal& val);
-    // static BooleanVal cast_to_boolean_val(FunctionContext* context, const StringVal& val);
+    static BooleanVal cast_to_boolean_val(FunctionContext* context, const StringVal& val);
     static BooleanVal cast_to_boolean_val(FunctionContext* context, const DateTimeVal& val);
 
     static TinyIntVal cast_to_tiny_int_val(FunctionContext* context, const BooleanVal& val);
@@ -118,8 +115,8 @@ public:
     static StringVal cast_to_string_val(FunctionContext* context, const FloatVal& val);
     static StringVal cast_to_string_val(FunctionContext* context, const DoubleVal& val);
     static StringVal cast_to_string_val(FunctionContext* context, const DateTimeVal& val);
+    static StringVal cast_to_string_val(FunctionContext* context, const StringVal& val);
 #if 0
-    static StringVal CastToStringVal(FunctionContext* context, const StringVal& val);
     static StringVal CastToChar(FunctionContext* context, const StringVal& val);
 #endif
 
@@ -127,6 +124,7 @@ public:
     static DateTimeVal cast_to_datetime_val(FunctionContext* context, const SmallIntVal& val);
     static DateTimeVal cast_to_datetime_val(FunctionContext* context, const IntVal& val);
     static DateTimeVal cast_to_datetime_val(FunctionContext* context, const BigIntVal& val);
+    static DateTimeVal cast_to_datetime_val(FunctionContext* context, const LargeIntVal& val);
     static DateTimeVal cast_to_datetime_val(FunctionContext* context, const FloatVal& val);
     static DateTimeVal cast_to_datetime_val(FunctionContext* context, const DoubleVal& val);
     static DateTimeVal cast_to_datetime_val(FunctionContext* context, const DateTimeVal& val);
@@ -136,12 +134,13 @@ public:
     static DateTimeVal cast_to_date_val(FunctionContext* context, const SmallIntVal& val);
     static DateTimeVal cast_to_date_val(FunctionContext* context, const IntVal& val);
     static DateTimeVal cast_to_date_val(FunctionContext* context, const BigIntVal& val);
+    static DateTimeVal cast_to_date_val(FunctionContext* context, const LargeIntVal& val);
     static DateTimeVal cast_to_date_val(FunctionContext* context, const FloatVal& val);
     static DateTimeVal cast_to_date_val(FunctionContext* context, const DoubleVal& val);
     static DateTimeVal cast_to_date_val(FunctionContext* context, const DateTimeVal& val);
     static DateTimeVal cast_to_date_val(FunctionContext* context, const StringVal& val);
 };
 
-}
+} // namespace doris
 
 #endif

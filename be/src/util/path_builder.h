@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,31 +15,30 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_PATH_BUILDER_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_PATH_BUILDER_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_PATH_BUILDER_H
+#define DORIS_BE_SRC_COMMON_UTIL_PATH_BUILDER_H
 
 #include <string>
 
-namespace palo {
+namespace doris {
 
-// Utility class to construct full paths relative to the palo_home path.
+// Utility class to construct full paths relative to the doris_home path.
 class PathBuilder {
 public:
-    // Sets full_path to <PALO_HOME>/path
+    // Sets full_path to <DORIS_HOME>/path
     static void get_full_path(const std::string& path, std::string* full_path);
 
-    // Sets full_path to <PALO_HOME>/<build><debug OR release>/path
+    // Sets full_path to <DORIS_HOME>/<build><debug OR release>/path
     static void get_full_build_path(const std::string& path, std::string* full_path);
 
 private:
-    // Cache of env['PALO_HOME']
-    static const char* _s_palo_home;
+    // Cache of env['DORIS_HOME']
+    static const char* _s_doris_home;
 
-    // Load _s_palo_home if it is not already loaded
-    static void load_palo_home();
+    // Load _s_doris_home if it is not already loaded
+    static void load_doris_home();
 };
 
-}
+} // namespace doris
 
 #endif
-

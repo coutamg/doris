@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,15 +17,18 @@
 
 #pragma once
 
-#include <string>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_set>
 
 #include "gen_cpp/Types_types.h"
+#include "gutil/ref_counted.h"
+#include "util/countdown_latch.h"
 #include "util/hash_util.hpp"
+#include "util/thread.h"
 
-namespace palo {
+namespace doris {
 
 class ExecEnv;
 
@@ -37,6 +38,7 @@ public:
     ~BrokerMgr();
     void init();
     const std::string& get_client_id(const TNetworkAddress& address);
+
 private:
     void ping(const TNetworkAddress& addr);
     void ping_worker();
@@ -45,8 +47,9 @@ private:
     std::string _client_id;
     std::mutex _mutex;
     std::unordered_set<TNetworkAddress> _broker_set;
-    bool _thread_stop;
-    std::thread _ping_thread;
+
+    CountDownLatch _stop_background_threads_latch;
+    scoped_refptr<Thread> _ping_thread;
 };
 
-}
+} // namespace doris

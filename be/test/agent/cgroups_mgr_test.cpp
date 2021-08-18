@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,12 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <algorithm>
-#include <fstream>
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
 #include "agent/cgroups_mgr.h"
-#include "boost/filesystem.hpp"
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "util/logging.h"
 
 #ifndef BE_TEST
@@ -34,22 +34,30 @@ using ::testing::Return;
 using ::testing::SetArgPointee;
 using std::string;
 
-namespace palo {
+namespace doris {
+
+StorageEngine* k_engine = nullptr;
 
 class CgroupsMgrTest : public testing::Test {
 public:
-    // create a mock cgroup folder 
+    // create a mock cgroup folder
     static void SetUpTestCase() {
-        ASSERT_FALSE(boost::filesystem::exists(_s_cgroup_path));
+        ASSERT_TRUE(std::filesystem::remove_all(_s_cgroup_path));
         // create a mock cgroup path
-        ASSERT_TRUE(boost::filesystem::create_directory(_s_cgroup_path));
+        ASSERT_TRUE(std::filesystem::create_directory(_s_cgroup_path));
+
+        std::vector<StorePath> paths;
+        paths.emplace_back(config::storage_root_path, -1);
+
+        doris::EngineOptions options;
+        options.store_paths = paths;
+        Status s = doris::StorageEngine::open(options, &k_engine);
+        ASSERT_TRUE(s.ok()) << s.to_string();
     }
 
     // delete the mock cgroup folder
-    static void TearDownTestCase() {
-        ASSERT_TRUE(boost::filesystem::remove_all(_s_cgroup_path));
-    }
-    
+    static void TearDownTestCase() { ASSERT_TRUE(std::filesystem::remove_all(_s_cgroup_path)); }
+
     // test if a file contains specific number
     static bool does_contain_number(const std::string& file_path, int32_t number) {
         std::ifstream input_file(file_path.c_str());
@@ -66,7 +74,7 @@ public:
     static CgroupsMgr _s_cgroups_mgr;
 };
 
-std::string CgroupsMgrTest::_s_cgroup_path = "./palo_cgroup_testxxxx123";
+std::string CgroupsMgrTest::_s_cgroup_path = "./doris_cgroup_testxxxx123";
 CgroupsMgr CgroupsMgrTest::_s_cgroups_mgr(NULL, CgroupsMgrTest::_s_cgroup_path);
 
 TEST_F(CgroupsMgrTest, TestIsDirectory) {
@@ -79,7 +87,6 @@ TEST_F(CgroupsMgrTest, TestIsDirectory) {
     // test file exist, but not folder
     bool not_folder = _s_cgroups_mgr.is_directory("/etc/profile");
     ASSERT_FALSE(not_folder);
-
 }
 
 TEST_F(CgroupsMgrTest, TestIsFileExist) {
@@ -94,29 +101,29 @@ TEST_F(CgroupsMgrTest, TestIsFileExist) {
 TEST_F(CgroupsMgrTest, TestInitCgroups) {
     // test for task file not exist
     AgentStatus op_status = _s_cgroups_mgr.init_cgroups();
-    ASSERT_EQ(AgentStatus::PALO_ERROR, op_status);
-    
+    ASSERT_EQ(AgentStatus::DORIS_ERROR, op_status);
+
     // create task file, then init should success
     std::string task_file_path = _s_cgroup_path + "/tasks";
     std::ofstream outfile(task_file_path.c_str());
     outfile << 1111111 << std::endl;
     outfile.close();
-    
+
     // create a mock user under cgroup path
-    ASSERT_TRUE(boost::filesystem::create_directory(_s_cgroup_path + "/yiguolei"));
+    ASSERT_TRUE(std::filesystem::create_directory(_s_cgroup_path + "/yiguolei"));
     std::ofstream user_out_file(_s_cgroup_path + "/yiguolei/tasks");
     user_out_file << 123 << std::endl;
     user_out_file.close();
 
     // create a mock user group under cgroup path
-    ASSERT_TRUE(boost::filesystem::create_directory(_s_cgroup_path + "/yiguolei/low"));
+    ASSERT_TRUE(std::filesystem::create_directory(_s_cgroup_path + "/yiguolei/low"));
     std::ofstream group_out_file(CgroupsMgrTest::_s_cgroup_path + "/yiguolei/low/tasks");
     group_out_file << 456 << std::endl;
     group_out_file.close();
 
     op_status = _s_cgroups_mgr.init_cgroups();
     // init should be successful
-    ASSERT_EQ(AgentStatus::PALO_SUCCESS, op_status);
+    ASSERT_EQ(AgentStatus::DORIS_SUCCESS, op_status);
     // all tasks should be migrated to root cgroup path
     ASSERT_TRUE(does_contain_number(task_file_path, 1111111));
     ASSERT_TRUE(does_contain_number(task_file_path, 123));
@@ -125,34 +132,28 @@ TEST_F(CgroupsMgrTest, TestInitCgroups) {
 
 TEST_F(CgroupsMgrTest, TestAssignThreadToCgroups) {
     // default cgroup not exist, so that assign to an unknown user will fail
-    AgentStatus op_status = _s_cgroups_mgr.assign_thread_to_cgroups(111,
-            "abc",
-            "low");
-    ASSERT_EQ(AgentStatus::PALO_ERROR, op_status);
+    AgentStatus op_status = _s_cgroups_mgr.assign_thread_to_cgroups(111, "abc", "low");
+    ASSERT_EQ(AgentStatus::DORIS_ERROR, op_status);
     // user cgroup exist
     // create a mock user under cgroup path
-    ASSERT_TRUE(boost::filesystem::create_directory(_s_cgroup_path + "/yiguolei2"));
+    ASSERT_TRUE(std::filesystem::create_directory(_s_cgroup_path + "/yiguolei2"));
     std::ofstream user_out_file(_s_cgroup_path + "/yiguolei2/tasks");
     user_out_file << 123 << std::endl;
     user_out_file.close();
 
-    op_status = _s_cgroups_mgr.assign_thread_to_cgroups(111,
-            "yiguolei2",
-            "aaaa");
-    ASSERT_EQ(AgentStatus::PALO_SUCCESS, op_status);
+    op_status = _s_cgroups_mgr.assign_thread_to_cgroups(111, "yiguolei2", "aaaa");
+    ASSERT_EQ(AgentStatus::DORIS_SUCCESS, op_status);
     ASSERT_TRUE(does_contain_number(_s_cgroup_path + "/yiguolei2/tasks", 111));
 
     // user,level cgroup exist
     // create a mock user group under cgroup path
-    ASSERT_TRUE(boost::filesystem::create_directory(_s_cgroup_path + "/yiguolei2/low"));
+    ASSERT_TRUE(std::filesystem::create_directory(_s_cgroup_path + "/yiguolei2/low"));
     std::ofstream group_out_file(_s_cgroup_path + "/yiguolei2/low/tasks");
     group_out_file << 456 << std::endl;
     group_out_file.close();
 
-    op_status = _s_cgroups_mgr.assign_thread_to_cgroups(111,
-            "yiguolei2",
-            "low");
-    ASSERT_EQ(AgentStatus::PALO_SUCCESS, op_status);
+    op_status = _s_cgroups_mgr.assign_thread_to_cgroups(111, "yiguolei2", "low");
+    ASSERT_EQ(AgentStatus::DORIS_SUCCESS, op_status);
     ASSERT_TRUE(does_contain_number(_s_cgroup_path + "/yiguolei2/low/tasks", 111));
 }
 
@@ -162,11 +163,9 @@ TEST_F(CgroupsMgrTest, TestModifyUserCgroups) {
     user_share["cpu.shares"] = 100;
     level_share["low"] = 100;
     std::string user_name = "user_modify";
-    AgentStatus op_status = _s_cgroups_mgr.modify_user_cgroups(user_name, 
-            user_share, 
-            level_share);
+    AgentStatus op_status = _s_cgroups_mgr.modify_user_cgroups(user_name, user_share, level_share);
 
-    ASSERT_EQ(AgentStatus::PALO_SUCCESS, op_status);
+    ASSERT_EQ(AgentStatus::DORIS_SUCCESS, op_status);
 
     ASSERT_TRUE(does_contain_number(_s_cgroup_path + "/user_modify/cpu.shares", 100));
     ASSERT_TRUE(does_contain_number(_s_cgroup_path + "/user_modify/low/cpu.shares", 100));
@@ -175,7 +174,7 @@ TEST_F(CgroupsMgrTest, TestModifyUserCgroups) {
 TEST_F(CgroupsMgrTest, TestUpdateLocalCgroups) {
     // mock TFetchResourceResult from fe
     TFetchResourceResult user_resource_result;
-   
+
     TUserResource user_resource;
     user_resource.shareByGroup["low"] = 123;
     user_resource.shareByGroup["normal"] = 234;
@@ -187,7 +186,7 @@ TEST_F(CgroupsMgrTest, TestUpdateLocalCgroups) {
     user_resource_result.resourceByUser["yiguolei3"] = user_resource;
 
     AgentStatus op_status = _s_cgroups_mgr.update_local_cgroups(user_resource_result);
-    ASSERT_EQ(AgentStatus::PALO_SUCCESS, op_status);
+    ASSERT_EQ(AgentStatus::DORIS_SUCCESS, op_status);
     ASSERT_EQ(2, _s_cgroups_mgr._cur_version);
     ASSERT_TRUE(does_contain_number(_s_cgroup_path + "/yiguolei3/cpu.shares", 100));
     ASSERT_TRUE(does_contain_number(_s_cgroup_path + "/yiguolei3/low/cpu.shares", 123));
@@ -197,13 +196,13 @@ TEST_F(CgroupsMgrTest, TestUpdateLocalCgroups) {
 TEST_F(CgroupsMgrTest, TestRelocateTasks) {
     // create a source cgroup, add some taskid into it
     AgentStatus op_status = _s_cgroups_mgr.relocate_tasks("/a/b/c/d", _s_cgroup_path);
-    ASSERT_EQ(AgentStatus::PALO_ERROR, op_status);
+    ASSERT_EQ(AgentStatus::DORIS_ERROR, op_status);
 }
 
-}  // namespace palo
+} // namespace doris
 
-int main(int argc, char **argv) {
-    palo::init_glog("be-test");
+int main(int argc, char** argv) {
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

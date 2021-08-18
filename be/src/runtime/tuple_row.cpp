@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,7 +17,22 @@
 
 #include "runtime/tuple_row.h"
 
-namespace palo {
-const char* TupleRow::_s_llvm_class_name = "class.palo::TupleRow";
+#include <sstream>
+
+namespace doris {
+
+std::string TupleRow::to_string(const RowDescriptor& d) {
+    std::stringstream out;
+    out << "[";
+    for (int i = 0; i < d.tuple_descriptors().size(); ++i) {
+        if (i != 0) {
+            out << " ";
+        }
+        out << Tuple::to_string(get_tuple(i), *d.tuple_descriptors()[i]);
+    }
+
+    out << "]";
+    return out.str();
 }
 
+} // namespace doris

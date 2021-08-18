@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -21,9 +18,10 @@
 #include "util/dynamic_util.h"
 
 #include <dlfcn.h>
+
 #include <sstream>
 
-namespace palo {
+namespace doris {
 
 Status dynamic_lookup(void* handle, const char* symbol, void** fn_ptr) {
     *(void**)(fn_ptr) = dlsym(handle, symbol);
@@ -32,10 +30,10 @@ Status dynamic_lookup(void* handle, const char* symbol, void** fn_ptr) {
     if (error != NULL) {
         std::stringstream ss;
         ss << "Unable to find " << symbol << "\ndlerror: " << error;
-        return Status(ss.str());
+        return Status::InternalError(ss.str());
     }
 
-    return Status::OK;
+    return Status::OK();
 }
 
 Status dynamic_open(const char* library, void** handle) {
@@ -46,14 +44,18 @@ Status dynamic_open(const char* library, void** handle) {
     if (*handle == NULL) {
         std::stringstream ss;
         ss << "Unable to load " << library << "\ndlerror: " << dlerror();
-        return Status(ss.str());
+        return Status::InternalError(ss.str());
     }
 
-    return Status::OK;
+    return Status::OK();
 }
 
 void dynamic_close(void* handle) {
+// There is an issue of LSAN can't deal well with dlclose(), so we disable LSAN here, more details:
+// https://github.com/google/sanitizers/issues/89
+#if !defined(ADDRESS_SANITIZER) && !defined(LEAK_SANITIZER)
     dlclose(handle);
+#endif
 }
 
-}
+} // namespace doris

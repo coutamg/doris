@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,14 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_BUFFER_BUILDER_HPP
-#define BDG_PALO_BE_SRC_COMMON_UTIL_BUFFER_BUILDER_HPP
+#ifndef DORIS_BE_SRC_COMMON_UTIL_BUFFER_BUILDER_HPP
+#define DORIS_BE_SRC_COMMON_UTIL_BUFFER_BUILDER_HPP
 
 #include <stdlib.h>
 #include <boost/cstdint.hpp>
 #include <glog/loging.h>
 
-namespace palo {
+namespace doris {
 
 // Utility class to build an in-memory buffer.
 class BufferBuilder {

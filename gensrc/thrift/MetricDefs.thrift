@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-namespace cpp palo
-namespace java com.baidu.palo.thrift
+namespace cpp doris
+namespace java org.apache.doris.thrift
 
 include "Metrics.thrift"
 
@@ -709,20 +706,20 @@ const map<string,TMetricDef> TMetricDefs =
     "contexts": [
       "PALO_BE"
     ], 
-    "description": "Looking count of olapengine's lru cache.", 
+    "description": "Looking count of StorageEngine's lru cache.", 
     "key": "palo_be.olap.lru_cache.lookup_count", 
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine Lru Cache Lookup Count", 
+    "label": "StorageEngine Lru Cache Lookup Count", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.lru_cache.hit_count": {
     "contexts": [
       "PALO_BE"
     ], 
-    "description": "Hit count of olapengine's lru cache.", 
+    "description": "Hit count of StorageEngine's lru cache.", 
     "key": "palo_be.olap.lru_cache.hit_count",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine Lru Cache Hit Count", 
+    "label": "StorageEngine Lru Cache Hit Count", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.push_count": {
@@ -732,7 +729,7 @@ const map<string,TMetricDef> TMetricDefs =
     "description": "Pushing count over the life of the Palo Be process.", 
     "key": "palo_be.olap.push_count",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine Pushing Count", 
+    "label": "StorageEngine Pushing Count", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.fetch_count": {
@@ -742,7 +739,7 @@ const map<string,TMetricDef> TMetricDefs =
     "description": "Fetch count over the life of the Palo Be process.", 
     "key": "palo_be.olap.fetch_count",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine Fetch Count", 
+    "label": "StorageEngine Fetch Count", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.request_count": {
@@ -752,7 +749,7 @@ const map<string,TMetricDef> TMetricDefs =
     "description": "Request count over the life of the Palo Be process.", 
     "key": "palo_be.olap.request_count",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine Request Count", 
+    "label": "StorageEngine Request Count", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.be_merge.delta_num": {
@@ -762,7 +759,7 @@ const map<string,TMetricDef> TMetricDefs =
     "description": "Base compaction num over the life of the Palo Be process.", 
     "key": "palo_be.olap.be_merge.delta_num",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine base compatcion num", 
+    "label": "StorageEngine base compatcion num", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.be_merge_size": {
@@ -772,7 +769,7 @@ const map<string,TMetricDef> TMetricDefs =
     "description": "Base compaction size over the life of the Palo Be process.", 
     "key": "palo_be.olap.be_merge_size",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine base compatcion size", 
+    "label": "StorageEngine base compatcion size", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.ce_merge.delta_num": {
@@ -782,7 +779,7 @@ const map<string,TMetricDef> TMetricDefs =
     "description": "Cumulative compaction num over the life of the Palo Be process.", 
     "key": "palo_be.olap.ce_merge.delta_num",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine cumulative compatcion num", 
+    "label": "StorageEngine cumulative compatcion num", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.olap.ce_merge_size": {
@@ -792,7 +789,7 @@ const map<string,TMetricDef> TMetricDefs =
     "description": "Cumulative compaction size over the life of the Palo Be process.", 
     "key": "palo_be.olap.ce_merge_size",
     "kind": Metrics.TMetricKind.COUNTER, 
-    "label": "OlapEngine cumulative compatcion size", 
+    "label": "StorageEngine cumulative compatcion size", 
     "units": Metrics.TUnit.NONE
   }, 
   "palo_be.thrift_server.PaloBackend.connections_in_use": {

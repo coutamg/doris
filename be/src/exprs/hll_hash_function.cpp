@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,55 +17,35 @@
 
 #include "exprs/hll_hash_function.h"
 
-#include "exprs/expr.h"
-#include "runtime/tuple_row.h"
-#include "runtime/datetime_value.h"
-#include "util/path_builder.h"
-#include "runtime/string_value.hpp"
 #include "exprs/aggregate_functions.h"
-#include "exprs/cast_functions.h"
-#include "olap/olap_common.h"
-#include "olap/utils.h"
 
-namespace palo {
+namespace doris {
 
-using palo_udf::BigIntVal;
-using palo_udf::StringVal;
- 
-void HllHashFunctions::init() {
-}
+using doris_udf::BigIntVal;
+using doris_udf::StringVal;
 
-StringVal HllHashFunctions::create_string_result(palo_udf::FunctionContext* ctx, 
-                                                     const StringVal& val, const bool is_null) {
-    std::string result;
-    if (is_null) {
-        // HLL_DATA_EMPTY
-        result = "0";
-    } else {
-        // HLL_DATA_EXPLHLL_DATA_EXPLICIT
-        uint64_t hash = HashUtil::murmur_hash64A(val.ptr, val.len, HashUtil::MURMUR_SEED);
-        char buf[10];
-        buf[0] = HLL_DATA_EXPLICIT;
-        buf[1] = 1;
-        *((uint64_t*)(buf + 2)) = hash;
-        result = std::string(buf, 10);
+void HllHashFunctions::init() {}
+
+StringVal HllHashFunctions::hll_hash(FunctionContext* ctx, const StringVal& input) {
+    HyperLogLog hll;
+    if (!input.is_null) {
+        uint64_t hash_value = HashUtil::murmur_hash64A(input.ptr, input.len, HashUtil::MURMUR_SEED);
+        hll.update(hash_value);
     }
-    return AnyValUtil::from_buffer_temp(ctx, result.c_str(), result.length());
+    std::string buf;
+    buf.resize(hll.max_serialized_size());
+    buf.resize(hll.serialize((uint8_t*)buf.data()));
+    return AnyValUtil::from_string_temp(ctx, buf);
 }
 
-StringVal HllHashFunctions::hll_hash(palo_udf::FunctionContext* ctx, 
-                                     const StringVal& input) {
-    return create_string_result(ctx, input, input.is_null);
-}
-    
-StringVal HllHashFunctions::hll_cardinality(palo_udf::FunctionContext* ctx, 
-                                            const StringVal& input) {
+BigIntVal HllHashFunctions::hll_cardinality(FunctionContext* ctx, const HllVal& input) {
     if (input.is_null) {
-        return StringVal::null();
+        return BigIntVal::null();
     }
-    StringVal dst;
+    HllVal dst;
     AggregateFunctions::hll_union_agg_init(ctx, &dst);
     AggregateFunctions::hll_union_agg_update(ctx, input, &dst);
     return AggregateFunctions::hll_union_agg_finalize(ctx, dst);
 }
-}
+
+} // namespace doris

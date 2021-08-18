@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,281 +16,410 @@
 // under the License.
 
 #include "util/metrics.h"
-#include <sstream>
-#include <memory>
-#include <functional>
 
-#include <boost/algorithm/string/join.hpp>
-#include <boost/foreach.hpp>
-#include <boost/bind.hpp>
-#include <boost/mem_fn.hpp>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
-#include "common/logging.h"
-#include "gutil/strings/substitute.h"
-#include "util/palo_metrics.h"
-#include "http/web_page_handler.h"
+namespace doris {
 
-namespace palo {
-
-template <>
-void ToJsonValue<std::string>(const std::string& value, const TUnit::type unit,
-        rapidjson::Document* document, rapidjson::Value* out_val) {
-    rapidjson::Value val(value.c_str(), document->GetAllocator());
-    *out_val = val;
-}
-
-void Metric::AddStandardFields(rapidjson::Document* document, rapidjson::Value* val) {
-    rapidjson::Value name(_key.c_str(), document->GetAllocator());
-    val->AddMember("name", name, document->GetAllocator());
-    rapidjson::Value desc(_description.c_str(), document->GetAllocator());
-    val->AddMember("description", desc, document->GetAllocator());
-    rapidjson::Value metric_value(ToHumanReadable().c_str(), document->GetAllocator());
-    val->AddMember("human_readable", metric_value, document->GetAllocator());
-}
-
-MetricDefs* MetricDefs::GetInstance() {
-    // Note that this is not thread-safe in C++03 (but will be in C++11 see
-    // http://stackoverflow.com/a/19907903/132034). We don't bother with the double-check
-    // locking pattern because it introduces complexity whereas a race is very unlikely
-    // and it doesn't matter if we construct two instances since MetricDefsConstants is
-    // just a constant map.
-    static MetricDefs instance;
-    return &instance;
-}
-
-TMetricDef MetricDefs::Get(const std::string& key, const std::string& arg) {
-    MetricDefs* inst = GetInstance();
-    std::map<std::string, TMetricDef>::iterator it = inst->_metric_defs.TMetricDefs.find(key);
-    if (it == inst->_metric_defs.TMetricDefs.end()) {
-        DCHECK(false) << "Could not find metric definition for key=" << key << " arg=" << arg;
-        return TMetricDef();
+std::ostream& operator<<(std::ostream& os, MetricType type) {
+    switch (type) {
+    case MetricType::COUNTER:
+        os << "counter";
+        break;
+    case MetricType::GAUGE:
+        os << "gauge";
+        break;
+    case MetricType::HISTOGRAM:
+        os << "histogram";
+        break;
+    case MetricType::SUMMARY:
+        os << "summary";
+        break;
+    case MetricType::UNTYPED:
+        os << "untyped";
+        break;
+    default:
+        os << "unknown";
+        break;
     }
-    TMetricDef md = it->second;
-    md.__set_key(strings::Substitute(md.key, arg));
-    md.__set_description(strings::Substitute(md.description, arg));
-    return md;
+    return os;
 }
 
-MetricGroup::MetricGroup(const std::string& name)
-    : _obj_pool(new ObjectPool()), _name(name) { }
-
-Status MetricGroup::init(WebPageHandler* webserver) {
-    if (webserver != NULL) {
-        WebPageHandler::PageHandlerCallback default_callback =
-            boost::bind<void>(boost::mem_fn(&MetricGroup::text_callback), this, _1, _2);
-        webserver->register_page("/metrics", default_callback);
-
-        WebPageHandler::PageHandlerCallback json_callback =
-            boost::bind<void>(boost::mem_fn(&MetricGroup::json_callback), this, _1, _2);
-        webserver->register_page("/jsonmetrics", json_callback);
+const char* unit_name(MetricUnit unit) {
+    switch (unit) {
+    case MetricUnit::NANOSECONDS:
+        return "nanoseconds";
+    case MetricUnit::MICROSECONDS:
+        return "microseconds";
+    case MetricUnit::MILLISECONDS:
+        return "milliseconds";
+    case MetricUnit::SECONDS:
+        return "seconds";
+    case MetricUnit::BYTES:
+        return "bytes";
+    case MetricUnit::ROWS:
+        return "rows";
+    case MetricUnit::PERCENT:
+        return "percent";
+    case MetricUnit::REQUESTS:
+        return "requests";
+    case MetricUnit::OPERATIONS:
+        return "operations";
+    case MetricUnit::BLOCKS:
+        return "blocks";
+    case MetricUnit::ROWSETS:
+        return "rowsets";
+    case MetricUnit::CONNECTIONS:
+        return "rowsets";
+    default:
+        return "nounit";
     }
-
-    return Status::OK;
 }
 
-/// TODO: init, CMCompatibleCallback, TemplateCallback are for new webserver
-/*
-Status MetricGroup::init(Webserver* webserver) {
-    if (webserver != NULL) {
-        Webserver::UrlCallback default_callback =
-            bind<void>(mem_fn(&MetricGroup::CMCompatibleCallback), this, _1, _2);
-        webserver->RegisterUrlCallback("/jsonmetrics", "legacy-metrics.tmpl",
-                default_callback, false);
-
-        Webserver::UrlCallback json_callback =
-            bind<void>(mem_fn(&MetricGroup::TemplateCallback), this, _1, _2);
-        webserver->RegisterUrlCallback("/metrics", "metrics.tmpl", json_callback);
-    }
-
-    return Status::OK();
-}
-
-void MetricGroup::CMCompatibleCallback(const Webserver::ArgumentMap& args,
-                                       Document* document) {
-    // If the request has a 'metric' argument, search all top-level metrics for that metric
-    // only. Otherwise, return document with list of all metrics at the top level.
-    Webserver::ArgumentMap::const_iterator metric_name = args.find("metric");
-
-    lock_guard<SpinLock> l(_lock);
-    if (metric_name != args.end()) {
-        MetricMap::const_iterator metric = _metric_map.find(metric_name->second);
-        if (metric != _metric_map.end()) {
-            metric->second->ToLegacyJson(document);
+std::string labels_to_string(std::initializer_list<const Labels*> multi_labels) {
+    bool all_empty = true;
+    for (const auto& labels : multi_labels) {
+        if (!labels->empty()) {
+            all_empty = false;
+            break;
         }
-        return;
+    }
+    if (all_empty) {
+        return std::string();
     }
 
-    stack<MetricGroup*> groups;
-    groups.push(this);
-    do {
-        // Depth-first traversal of children to flatten all metrics, which is what was
-        // expected by CM before we introduced metric groups.
-        MetricGroup* group = groups.top();
-        for (const ChildGroupMap::value_type& child: group->_children) {
-            groups.push(child.second);
-        }
-        for (const MetricMap::value_type& m: group->_metric_map) {
-            m.second->ToLegacyJson(document);
-        }
-    } while (!groups.empty());
-}
-
-void MetricGroup::TemplateCallback(const Webserver::ArgumentMap& args,
-                                   Document* document) {
-    Webserver::ArgumentMap::const_iterator metric_group = args.find("metric_group");
-
-    lock_guard<SpinLock> l(_lock);
-    // If no particular metric group is requested, render this metric group (and all its
-    // children).
-    if (metric_group == args.end()) {
-        Value container;
-        ToJson(true, document, &container);
-        document->AddMember("metric_group", container, document->GetAllocator());
-        return;
-    }
-
-    // Search all metric groups to find the one we're looking for. In the future, we'll
-    // change this to support path-based resolution of metric groups.
-    MetricGroup* found_group = NULL;
-    stack<MetricGroup*> groups;
-    groups.push(this);
-    while (!groups.empty() && found_group == NULL) {
-        // Depth-first traversal of children to flatten all metrics, which is what was
-        // expected by CM before we introduced metric groups.
-        MetricGroup* group = groups.top();
-        groups.pop();
-        for (const ChildGroupMap::value_type& child: group->_children) {
-            if (child.first == metric_group->second) {
-                found_group = child.second;
-                break;
+    std::stringstream ss;
+    ss << "{";
+    int i = 0;
+    for (auto labels : multi_labels) {
+        for (const auto& label : *labels) {
+            if (i++ > 0) {
+                ss << ",";
             }
-            groups.push(child.second);
+            ss << label.first << "=\"" << label.second << "\"";
         }
     }
-    if (found_group != NULL) {
-        Value container;
-        found_group->ToJson(false, document, &container);
-        document->AddMember("metric_group", container, document->GetAllocator());
-    } else {
-        Value error(Substitute("Metric group $0 not found", metric_group->second).c_str(),
-                    document->GetAllocator());
-        document->AddMember("error", error, document->GetAllocator());
-    }
-}
-*/
+    ss << "}";
 
-void MetricGroup::ToJson(bool include_children, rapidjson::Document* document, rapidjson::Value* out_val) {
-    rapidjson::Value metric_list(rapidjson::kArrayType);
-    for (const MetricMap::value_type& m: _metric_map) {
-        rapidjson::Value metric_value;
-        m.second->ToJson(document, &metric_value);
-        metric_list.PushBack(metric_value, document->GetAllocator());
-    }
-
-    rapidjson::Value container(rapidjson::kObjectType);
-    container.AddMember("metrics", metric_list, document->GetAllocator());
-    container.AddMember("name", 
-        rapidjson::Value(_name.c_str(), document->GetAllocator()).Move(), document->GetAllocator());
-    if (include_children) {
-        rapidjson::Value child_groups(rapidjson::kArrayType);
-        for (const ChildGroupMap::value_type& child: _children) {
-            rapidjson::Value child_value;
-            child.second->ToJson(true, document, &child_value);
-            child_groups.PushBack(child_value, document->GetAllocator());
-        }
-        container.AddMember("child_groups", child_groups, document->GetAllocator());
-    }
-
-    *out_val = container;
-}
-
-MetricGroup* MetricGroup::GetOrCreateChildGroup(const std::string& name) {
-    std::lock_guard<SpinLock> l(_lock);
-    ChildGroupMap::iterator it = _children.find(name);
-    if (it != _children.end()) return it->second;
-    MetricGroup* group = _obj_pool->add(new MetricGroup(name));
-    _children[name] = group;
-    return group;
-}
-
-MetricGroup* MetricGroup::FindChildGroup(const std::string& name) {
-    std::lock_guard<SpinLock> l(_lock);
-    ChildGroupMap::iterator it = _children.find(name);
-    if (it != _children.end()) return it->second;
-    return NULL;
-}
-
-///TODO: debug string is for new web server
-/*
-std::string MetricGroup::debug_string() {
-    Webserver::ArgumentMap empty_map;
-    rapidjson::Document document;
-    document.SetObject();
-    TemplateCallback(empty_map, &document);
-    StringBuffer strbuf;
-    PrettyWriter<StringBuffer> writer(strbuf);
-    document.Accept(writer);
-    return strbuf.GetString();
-}
-*/
-
-TMetricDef MakeTMetricDef(const std::string& key, TMetricKind::type kind,
-                                  TUnit::type unit) {
-    TMetricDef ret;
-    ret.__set_key(key);
-    ret.__set_kind(kind);
-    ret.__set_units(unit);
-    return ret;
-}
-
-void MetricGroup::print_metric_map(std::stringstream* output) {
-    std::lock_guard<SpinLock> l(_lock);
-    BOOST_FOREACH(const MetricMap::value_type & m, _metric_map) {
-        m.second->print(output);
-        (*output) << std::endl;
-    }
-}
-
-void MetricGroup::print_metric_map_as_json(std::vector<std::string>* metrics) {
-    std::lock_guard<SpinLock> l(_lock);
-    BOOST_FOREACH(const MetricMap::value_type & m, _metric_map) {
-        std::stringstream ss;
-        m.second->print_json(&ss);
-        metrics->push_back(ss.str());
-    }
-}
-
-std::string MetricGroup::debug_string() {
-    std::stringstream ss;
-    WebPageHandler::ArgumentMap empty_map;
-    text_callback(empty_map, &ss);
     return ss.str();
 }
 
-std::string MetricGroup::debug_string_json() {
+std::string Metric::to_prometheus(const std::string& display_name,
+                                  const Labels& entity_labels,
+                                  const Labels& metric_labels) const {
     std::stringstream ss;
-    WebPageHandler::ArgumentMap empty_map;
-    json_callback(empty_map, &ss);
+    ss << display_name                                          // metric name
+       << labels_to_string({&entity_labels, &metric_labels})    // metric labels
+       << " " << to_string() << "\n";                           // metric value
     return ss.str();
 }
 
-void MetricGroup::text_callback(const WebPageHandler::ArgumentMap& args, std::stringstream* output) {
-    (*output) << "<pre>";
-    print_metric_map(output);
-    (*output) << "</pre>";
+std::map<std::string, double> HistogramMetric::_s_output_percentiles = {{"0.50", 50.0},
+                                                                        {"0.75", 75.0},
+                                                                        {"0.90", 90.0},
+                                                                        {"0.95", 95.0},
+                                                                        {"0.99", 99.0}};
+void HistogramMetric::clear() {
+    std::lock_guard<SpinLock> l(_lock);
+    _stats.clear();
 }
 
-void MetricGroup::json_callback(const WebPageHandler::ArgumentMap& args, std::stringstream* output) {
-    (*output) << "{";
-    std::vector<std::string> metrics;
-    print_metric_map_as_json(&metrics);
-    (*output) << boost::join(metrics, ",\n");
-    (*output) << "}";
+bool HistogramMetric::is_empty() const {
+    return _stats.is_empty();
 }
 
-template<> void print_primitive_as_json<std::string>(const std::string& v,
-                                                     std::stringstream* out) {
-    (*out) << "\"" << v << "\"";
+void HistogramMetric::add(const uint64_t& value) {
+    _stats.add(value);
 }
 
+void HistogramMetric::merge(const HistogramMetric& other) {
+    std::lock_guard<SpinLock> l(_lock);
+    _stats.merge(other._stats);
 }
+
+void HistogramMetric::set_histogram(const HistogramStat& stats) {
+    std::lock_guard<SpinLock> l(_lock);
+    _stats.clear();
+    _stats.merge(stats);
+}
+
+double HistogramMetric::median() const {
+    return _stats.median();
+}
+
+double HistogramMetric::percentile(double p) const {
+    return _stats.percentile(p);
+}
+
+double HistogramMetric::average() const {
+    return _stats.average();
+}
+
+double HistogramMetric::standard_deviation() const {
+    return _stats.standard_deviation();
+}
+
+std::string HistogramMetric::to_string() const {
+    return _stats.to_string();
+}
+
+std::string HistogramMetric::to_prometheus(const std::string& display_name,
+                                           const Labels& entity_labels,
+                                           const Labels& metric_labels) const {
+    std::stringstream ss;
+    for (const auto& percentile : _s_output_percentiles) {
+        auto quantile_lable = Labels({{"quantile", percentile.first}});
+        ss << display_name
+           << labels_to_string({&entity_labels, &metric_labels, &quantile_lable})
+           << " " << _stats.percentile(percentile.second) << "\n";
+    }
+    ss << display_name << "_sum"
+       << labels_to_string({&entity_labels, &metric_labels})
+       << " " << _stats.sum() << "\n";
+    ss << display_name << "_count"
+       << labels_to_string({&entity_labels, &metric_labels})
+       << " " << _stats.num() << "\n";
+    ss << display_name << "_max"
+       << labels_to_string({&entity_labels, &metric_labels})
+       << " " << _stats.max() << "\n";
+    ss << display_name << "_min"
+       << labels_to_string({&entity_labels, &metric_labels})
+       << " " << _stats.min() << "\n";
+    ss << display_name << "_average"
+       << labels_to_string({&entity_labels, &metric_labels})
+       << " " << _stats.average() << "\n";
+    ss << display_name << "_median"
+       << labels_to_string({&entity_labels, &metric_labels})
+       << " " << _stats.median() << "\n";
+    ss << display_name << "_standard_deviation"
+       << labels_to_string({&entity_labels, &metric_labels})
+       << " " << _stats.standard_deviation() << "\n";
+
+    return ss.str();
+}
+
+rj::Value HistogramMetric::to_json_value(rj::Document::AllocatorType& allocator) const {
+    rj::Value json_value(rj::kObjectType);
+    json_value.AddMember("total_count", rj::Value(_stats.num()), allocator);
+    json_value.AddMember("min", rj::Value(_stats.min()), allocator);
+    json_value.AddMember("average", rj::Value(_stats.average()), allocator);
+    json_value.AddMember("median", rj::Value(_stats.median()), allocator);
+    for (const auto& percentile : _s_output_percentiles) {
+        json_value.AddMember(rj::Value(std::string("percentile_").append(percentile.first.substr(2)).c_str(), allocator),
+                             rj::Value(_stats.percentile(percentile.second)), allocator);
+    }
+    json_value.AddMember("standard_deviation", rj::Value(_stats.standard_deviation()), allocator);
+    json_value.AddMember("max", rj::Value(_stats.max()), allocator);
+    json_value.AddMember("total_sum", rj::Value(_stats.sum()), allocator);
+
+    return json_value;
+}
+
+std::string MetricPrototype::simple_name() const {
+    return group_name.empty() ? name : group_name;
+}
+
+std::string MetricPrototype::combine_name(const std::string& registry_name) const {
+    return (registry_name.empty() ? std::string() : registry_name + "_") + simple_name();
+}
+
+std::string MetricPrototype::to_prometheus(const std::string& registry_name) const {
+    std::stringstream ss;
+    ss << "# TYPE " << combine_name(registry_name) << " " << type << "\n";
+    return ss.str();
+}
+
+void MetricEntity::deregister_metric(const MetricPrototype* metric_type) {
+    std::lock_guard<SpinLock> l(_lock);
+    auto metric = _metrics.find(metric_type);
+    if (metric != _metrics.end()) {
+        delete metric->second;
+        _metrics.erase(metric);
+    }
+}
+
+Metric* MetricEntity::get_metric(const std::string& name, const std::string& group_name) const {
+    MetricPrototype dummy(MetricType::UNTYPED, MetricUnit::NOUNIT, name, "", group_name);
+    std::lock_guard<SpinLock> l(_lock);
+    auto it = _metrics.find(&dummy);
+    if (it == _metrics.end()) {
+        return nullptr;
+    }
+    return it->second;
+}
+
+void MetricEntity::register_hook(const std::string& name, const std::function<void()>& hook) {
+    std::lock_guard<SpinLock> l(_lock);
+    DCHECK(_hooks.find(name) == _hooks.end()) << "hook is already exist! " << _name << ":" << name;
+    _hooks.emplace(name, hook);
+}
+
+void MetricEntity::deregister_hook(const std::string& name) {
+    std::lock_guard<SpinLock> l(_lock);
+    _hooks.erase(name);
+}
+
+void MetricEntity::trigger_hook_unlocked(bool force) const {
+    // When 'enable_metric_calculator' is true, hooks will be triggered by a background thread,
+    // see 'calculate_metrics' in daemon.cpp for more details.
+    if (!force && config::enable_metric_calculator) {
+        return;
+    }
+    for (const auto& hook : _hooks) {
+        hook.second();
+    }
+}
+
+MetricRegistry::~MetricRegistry() {}
+
+std::shared_ptr<MetricEntity> MetricRegistry::register_entity(const std::string& name,
+                                                              const Labels& labels,
+                                                              MetricEntityType type) {
+    std::shared_ptr<MetricEntity> entity = std::make_shared<MetricEntity>(type, name, labels);
+    std::lock_guard<SpinLock> l(_lock);
+    auto inserted_entity = _entities.insert(std::make_pair(entity, 1));
+    if (!inserted_entity.second) {
+        // If exist, increase the registered count
+        inserted_entity.first->second++;
+    }
+    return inserted_entity.first->first;
+}
+
+void MetricRegistry::deregister_entity(const std::shared_ptr<MetricEntity>& entity) {
+    std::lock_guard<SpinLock> l(_lock);
+    auto found_entity = _entities.find(entity);
+    if (found_entity != _entities.end()) {
+        // Decrease the registered count
+        --found_entity->second;
+        if (found_entity->second == 0) {
+            // Only erase it when registered count is zero
+            _entities.erase(found_entity);
+        }
+    }
+}
+
+std::shared_ptr<MetricEntity> MetricRegistry::get_entity(const std::string& name,
+                                                         const Labels& labels,
+                                                         MetricEntityType type) {
+    std::shared_ptr<MetricEntity> dummy = std::make_shared<MetricEntity>(type, name, labels);
+
+    std::lock_guard<SpinLock> l(_lock);
+    auto entity = _entities.find(dummy);
+    if (entity == _entities.end()) {
+        return std::shared_ptr<MetricEntity>();
+    }
+    return entity->first;
+}
+
+void MetricRegistry::trigger_all_hooks(bool force) const {
+    std::lock_guard<SpinLock> l(_lock);
+    for (const auto& entity : _entities) {
+        std::lock_guard<SpinLock> l(entity.first->_lock);
+        entity.first->trigger_hook_unlocked(force);
+    }
+}
+
+std::string MetricRegistry::to_prometheus(bool with_tablet_metrics) const {
+    // Reorder by MetricPrototype
+    EntityMetricsByType entity_metrics_by_types;
+    std::lock_guard<SpinLock> l(_lock);
+    for (const auto& entity : _entities) {
+        if (entity.first->_type == MetricEntityType::kTablet && !with_tablet_metrics) {
+            continue;
+        }
+        std::lock_guard<SpinLock> l(entity.first->_lock);
+        entity.first->trigger_hook_unlocked(false);
+        for (const auto& metric : entity.first->_metrics) {
+            std::pair<MetricEntity*, Metric*> new_elem =
+                    std::make_pair(entity.first.get(), metric.second);
+            auto found = entity_metrics_by_types.find(metric.first);
+            if (found == entity_metrics_by_types.end()) {
+                entity_metrics_by_types.emplace(
+                        metric.first, std::vector<std::pair<MetricEntity*, Metric*>>({new_elem}));
+            } else {
+                found->second.emplace_back(new_elem);
+            }
+        }
+    }
+
+    // Output
+    std::stringstream ss;
+    std::string last_group_name;
+    for (const auto& entity_metrics_by_type : entity_metrics_by_types) {
+        if (last_group_name.empty() ||
+            last_group_name != entity_metrics_by_type.first->group_name) {
+            ss << entity_metrics_by_type.first->to_prometheus(_name);   // metric TYPE line
+        }
+        last_group_name = entity_metrics_by_type.first->group_name;
+        std::string display_name = entity_metrics_by_type.first->combine_name(_name);
+        for (const auto& entity_metric : entity_metrics_by_type.second) {
+            ss << entity_metric.second->to_prometheus(display_name,     // metric key-value line
+                                                      entity_metric.first->_labels,
+                                                      entity_metrics_by_type.first->labels);
+        }
+    }
+
+    return ss.str();
+}
+
+std::string MetricRegistry::to_json(bool with_tablet_metrics) const {
+    rj::Document doc{rj::kArrayType};
+    rj::Document::AllocatorType& allocator = doc.GetAllocator();
+    std::lock_guard<SpinLock> l(_lock);
+    for (const auto& entity : _entities) {
+        if (entity.first->_type == MetricEntityType::kTablet && !with_tablet_metrics) {
+            continue;
+        }
+        std::lock_guard<SpinLock> l(entity.first->_lock);
+        entity.first->trigger_hook_unlocked(false);
+        for (const auto& metric : entity.first->_metrics) {
+            rj::Value metric_obj(rj::kObjectType);
+            // tags
+            rj::Value tag_obj(rj::kObjectType);
+            tag_obj.AddMember("metric", rj::Value(metric.first->simple_name().c_str(), allocator),
+                              allocator);
+            // MetricPrototype's labels
+            for (auto& label : metric.first->labels) {
+                tag_obj.AddMember(rj::Value(label.first.c_str(), allocator),
+                                  rj::Value(label.second.c_str(), allocator), allocator);
+            }
+            // MetricEntity's labels
+            for (auto& label : entity.first->_labels) {
+                tag_obj.AddMember(rj::Value(label.first.c_str(), allocator),
+                                  rj::Value(label.second.c_str(), allocator), allocator);
+            }
+            metric_obj.AddMember("tags", tag_obj, allocator);
+            // unit
+            rj::Value unit_val(unit_name(metric.first->unit), allocator);
+            metric_obj.AddMember("unit", unit_val, allocator);
+            // value
+            metric_obj.AddMember("value", metric.second->to_json_value(allocator), allocator);
+            doc.PushBack(metric_obj, allocator);
+        }
+    }
+
+    rj::StringBuffer strBuf;
+    rj::Writer<rj::StringBuffer> writer(strBuf);
+    doc.Accept(writer);
+    return strBuf.GetString();
+}
+
+std::string MetricRegistry::to_core_string() const {
+    std::stringstream ss;
+    std::lock_guard<SpinLock> l(_lock);
+    for (const auto& entity : _entities) {
+        std::lock_guard<SpinLock> l(entity.first->_lock);
+        entity.first->trigger_hook_unlocked(false);
+        for (const auto& metric : entity.first->_metrics) {
+            if (metric.first->is_core_metric) {
+                ss << metric.first->combine_name(_name) << " LONG " << metric.second->to_string()
+                   << "\n";
+            }
+        }
+    }
+
+    return ss.str();
+}
+
+} // namespace doris

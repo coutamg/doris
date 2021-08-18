@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,43 +15,36 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_RESULT_WRITER_H
-#define  BDG_PALO_BE_RUNTIME_RESULT_WRITER_H
-
-#include <vector>
+#pragma once
 
 #include "common/status.h"
+#include "gen_cpp/PlanNodes_types.h"
 
-namespace palo {
+namespace doris {
 
-class TupleRow;
+class Status;
 class RowBatch;
-class ExprContext;
-class MysqlRowBuffer;
-class BufferControlBlock;
 class RuntimeState;
+class TypeDescriptor;
 
-//convert the row batch to mysql protol row
+// abstract class of the result writer
 class ResultWriter {
 public:
-    ResultWriter(BufferControlBlock* sinker, const std::vector<ExprContext*>& output_expr_ctxs);
-    ~ResultWriter();
+    ResultWriter(){};
+    ~ResultWriter(){};
 
-    Status init(RuntimeState* state);
-    // convert one row batch to mysql result and
-    // append this batch to the result sink
-    Status append_row_batch(RowBatch* batch);
+    virtual Status init(RuntimeState* state) = 0;
+    // convert and write one row batch
+    virtual Status append_row_batch(const RowBatch* batch) = 0;
 
-private:
-    // convert one tuple row
-    Status add_one_row(TupleRow* row);
+    virtual Status close() = 0;
 
-    // The expressions that are run to create tuples to be written to hbase.
-    BufferControlBlock* _sinker;
-    const std::vector<ExprContext*>& _output_expr_ctxs;
-    MysqlRowBuffer* _row_buffer;
+    virtual int64_t get_written_rows() const { return _written_rows; }
+
+    static const std::string NULL_IN_CSV;
+
+protected:
+    int64_t _written_rows = 0; // number of rows written
 };
 
-}
-
-#endif
+} // namespace doris

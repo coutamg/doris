@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_UTIL_BFD_PARSER_H
-#define BDG_PALO_BE_SRC_UTIL_BFD_PARSER_H
+#ifndef DORIS_BE_SRC_UTIL_BFD_PARSER_H
+#define DORIS_BE_SRC_UTIL_BFD_PARSER_H
 
 #ifndef PACKAGE
 #define PACKAGE
@@ -29,13 +26,13 @@
 #define PACKAGE_VERSION
 #endif
 
+#include <bfd.h>
+
 #include <mutex>
 #include <string>
 #include <vector>
 
-#include <bfd.h>
-
-namespace palo {
+namespace doris {
 
 class BfdParser {
 public:
@@ -51,16 +48,14 @@ public:
     // Call parse before call this function
     // Return 0 if found and fill file_name, function_name, lineno
     //  -1 otherwise
-    int decode_address(const char* str, const char** end, 
-                       std::string* file_name, std::string* function_name,
-                       unsigned int* lineno);
+    int decode_address(const char* str, const char** end, std::string* file_name,
+                       std::string* function_name, unsigned int* lineno);
 
-    long num_symbols() const {
-        return _num_symbols;
-    }
+    long num_symbols() const { return _num_symbols; }
 
     static void list_targets(std::vector<std::string>* targets);
     void list_sections(std::string* ss);
+
 private:
     static void init_bfd();
 
@@ -78,6 +73,6 @@ private:
     unsigned int _symbol_size;
 };
 
-}
+} // namespace doris
 
 #endif

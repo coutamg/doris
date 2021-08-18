@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,10 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_MULTI_PRECISION_H
-#define BDG_PALO_BE_RUNTIME_MULTI_PRECISION_H
+#ifndef DORIS_BE_RUNTIME_MULTI_PRECISION_H
+#define DORIS_BE_RUNTIME_MULTI_PRECISION_H
 
-namespace palo {
+namespace doris {
 
 /// Get the high and low bits of an int128_t
 inline uint64_t high_bits(__int128 x) {
@@ -32,6 +29,5 @@ inline uint64_t low_bits(__int128 x) {
     return x & 0xffffffffffffffff;
 }
 
-}
+} // namespace doris
 #endif
-

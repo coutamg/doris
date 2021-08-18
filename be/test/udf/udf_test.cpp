@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,15 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "udf/udf_test_harness.hpp"
-
-#include <iostream>
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <gtest/gtest.h>
-#include "util/logging.h"
-#include "common/logging.h"
 
-namespace palo_udf {
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <iostream>
+
+#include "common/logging.h"
+#include "udf/udf_test_harness.hpp"
+#include "util/logging.h"
+
+namespace doris_udf {
 
 DoubleVal zero_udf(FunctionContext* context) {
     return DoubleVal(0);
@@ -52,8 +50,8 @@ StringVal upper_udf(FunctionContext* context, const StringVal& input) {
     return result;
 }
 
-FloatVal min3(FunctionContext* context, const FloatVal& f1,
-              const FloatVal& f2, const FloatVal& f3) {
+FloatVal min3(FunctionContext* context, const FloatVal& f1, const FloatVal& f2,
+              const FloatVal& f3) {
     bool is_null = true;
     float v = 0.0;
 
@@ -152,8 +150,8 @@ StringVal time_to_string(FunctionContext* context, const TimestampVal& time) {
     boost::posix_time::ptime t(*(boost::gregorian::date*)&time.date);
     t += boost::posix_time::nanoseconds(time.time_of_day);
     std::stringstream ss;
-    ss << boost::posix_time::to_iso_extended_string(t) 
-            << " " << boost::posix_time::to_simple_string(t.time_of_day());
+    ss << boost::posix_time::to_iso_extended_string(t) << " "
+       << boost::posix_time::to_simple_string(t.time_of_day());
     std::string s = ss.str();
     StringVal result(context, s.size());
     memcpy(result.ptr, s.data(), result.len);
@@ -170,30 +168,29 @@ TEST(UdfTest, TestValidate) {
     EXPECT_TRUE(UdfTestHarness::validat_udf<DoubleVal>(zero_udf, DoubleVal(0)));
     EXPECT_FALSE(UdfTestHarness::validat_udf<DoubleVal>(zero_udf, DoubleVal(10)));
 
-    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(
-                     log_udf, StringVal("abcd"), StringVal("abcd"))));
+    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(log_udf, StringVal("abcd"),
+                                                                   StringVal("abcd"))));
 
-    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(
-                     upper_udf, StringVal("abcd"), StringVal("ABCD"))));
+    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(upper_udf, StringVal("abcd"),
+                                                                   StringVal("ABCD"))));
 
     EXPECT_TRUE((UdfTestHarness::validat_udf<FloatVal, FloatVal, FloatVal, FloatVal>(
-                     min3, FloatVal(1), FloatVal(2), FloatVal(3), FloatVal(1))));
+            min3, FloatVal(1), FloatVal(2), FloatVal(3), FloatVal(1))));
     EXPECT_TRUE((UdfTestHarness::validat_udf<FloatVal, FloatVal, FloatVal, FloatVal>(
-                     min3, FloatVal(1), FloatVal::null(), FloatVal(3), FloatVal(1))));
+            min3, FloatVal(1), FloatVal::null(), FloatVal(3), FloatVal(1))));
     EXPECT_TRUE((UdfTestHarness::validat_udf<FloatVal, FloatVal, FloatVal, FloatVal>(
-                     min3, FloatVal::null(), FloatVal::null(),
-                     FloatVal::null(), FloatVal::null())));
+            min3, FloatVal::null(), FloatVal::null(), FloatVal::null(), FloatVal::null())));
 }
 
 TEST(UdfTest, TestTimestampVal) {
     boost::gregorian::date d(2003, 3, 15);
     TimestampVal t1(*(int32_t*)&d);
-    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, TimestampVal>(
-                     time_to_string, t1, "2003-03-15 00:00:00")));
+    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, TimestampVal>(time_to_string, t1,
+                                                                      "2003-03-15 00:00:00")));
 
     TimestampVal t2(*(int32_t*)&d, 1000L * 1000L * 5000L);
-    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, TimestampVal>(
-                     time_to_string, t2, "2003-03-15 00:00:05")));
+    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, TimestampVal>(time_to_string, t2,
+                                                                      "2003-03-15 00:00:05")));
 }
 
 TEST(UdfTest, TestVarArgs) {
@@ -201,23 +198,23 @@ TEST(UdfTest, TestVarArgs) {
     input.push_back(StringVal("Hello"));
     input.push_back(StringVal("World"));
 
-    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(
-                     concat, input, StringVal("HelloWorld"))));
+    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(concat, input,
+                                                                   StringVal("HelloWorld"))));
 
     input.push_back(StringVal("More"));
-    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(
-                     concat, input, StringVal("HelloWorldMore"))));
+    EXPECT_TRUE((UdfTestHarness::validat_udf<StringVal, StringVal>(concat, input,
+                                                                   StringVal("HelloWorldMore"))));
 
     std::vector<IntVal> args;
     args.resize(10);
     EXPECT_TRUE((UdfTestHarness::validat_udf<IntVal, BigIntVal, IntVal>(
-                     num_var_args, BigIntVal(0), args, IntVal(args.size()))));
+            num_var_args, BigIntVal(0), args, IntVal(args.size()))));
 }
-}
+} // namespace doris_udf
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }

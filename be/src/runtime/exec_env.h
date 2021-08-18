@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,44 +15,55 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_EXEC_ENV_H
-#define BDG_PALO_BE_RUNTIME_EXEC_ENV_H
+#ifndef DORIS_BE_RUNTIME_EXEC_ENV_H
+#define DORIS_BE_RUNTIME_EXEC_ENV_H
 
-#include <boost/scoped_ptr.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/thread/thread.hpp>
-
-#include "agent/cgroups_mgr.h"
 #include "common/status.h"
-#include "exprs/timestamp_functions.h"
-#include "runtime/client_cache.h"
-#include "runtime/lib_cache.h"
-#include "util/thread_pool.hpp"
-#include "util/priority_thread_pool.hpp"
-#include "util/thread_pool.hpp"
+#include "olap/options.h"
 
-#include "rpc/connection_manager.h"
+namespace doris {
 
-namespace palo {
-
-class DataStreamMgr;
-class ResultBufferMgr;
-class TestExecEnv;
-class Webserver;
-class WebPageHandler;
-class MetricGroup;
-class MemTracker;
-class PoolMemTrackerRegistry;
-class ThreadResourceMgr;
-class FragmentMgr;
-class TMasterInfo;
-class EtlJobMgr;
-class LoadPathMgr;
-class DiskIoMgr;
-class TmpFileMgr;
 class BfdParser;
-class PullLoadTaskMgr;
 class BrokerMgr;
+class BrpcStubCache;
+class BufferPool;
+class CgroupsMgr;
+class DataStreamMgr;
+class DiskIoMgr;
+class EtlJobMgr;
+class EvHttpServer;
+class ExternalScanContextMgr;
+class FragmentMgr;
+class ResultCache;
+class LoadPathMgr;
+class LoadStreamMgr;
+class MemTracker;
+class StorageEngine;
+class PoolMemTrackerRegistry;
+class PriorityThreadPool;
+class ReservationTracker;
+class ResultBufferMgr;
+class ResultQueueMgr;
+class TMasterInfo;
+class LoadChannelMgr;
+class TestExecEnv;
+class ThreadResourceMgr;
+class TmpFileMgr;
+class WebPageHandler;
+class StreamLoadExecutor;
+class RoutineLoadTaskExecutor;
+class SmallFileMgr;
+class FileBlockManager;
+class PluginMgr;
+class FoldConstantMgr;
+
+class BackendServiceClient;
+class FrontendServiceClient;
+class TPaloBrokerServiceClient;
+class TExtDataSourceServiceClient;
+template <class T>
+class ClientCache;
+class HeartbeatFlags;
 
 // Execution environment for queries/plan fragments.
 // Contains all required global structures, and handles to
@@ -63,149 +71,156 @@ class BrokerMgr;
 // once to properly initialise service state.
 class ExecEnv {
 public:
-    ExecEnv();
+    // Initial exec enviorment. must call this to init all
+    static Status init(ExecEnv* env, const std::vector<StorePath>& store_paths);
+    static void destroy(ExecEnv* exec_env);
 
-    /// Returns the first created exec env instance. In a normal impalad, this is
+    /// Returns the first created exec env instance. In a normal doris, this is
     /// the only instance. In test setups with multiple ExecEnv's per process,
     /// we return the most recently created instance.
-    static ExecEnv* GetInstance() { return _exec_env; }
+    static ExecEnv* GetInstance() {
+        static ExecEnv s_exec_env;
+        return &s_exec_env;
+    }
+
+    // only used for test
+    ExecEnv();
 
     // Empty destructor because the compiler-generated one requires full
     // declarations for classes in scoped_ptrs.
-    virtual ~ExecEnv();
+    ~ExecEnv();
 
-    DataStreamMgr* stream_mgr() {
-        return _stream_mgr.get();
-    }
-    ResultBufferMgr* result_mgr() {
-        return _result_mgr.get();
-    }
-    BackendServiceClientCache* client_cache() {
-        return _client_cache.get();
-    }
-    FrontendServiceClientCache* frontend_client_cache() {
-        return _frontend_client_cache.get();
-    }
-    BrokerServiceClientCache* broker_client_cache() {
-        return _broker_client_cache.get();
-    }
-    Webserver* webserver() {
-        return _webserver.get();
-    }
-    WebPageHandler* web_page_handler() {
-        return _web_page_handler.get();
-    }
-    MetricGroup* metrics() {
-        return _metrics.get();
-    }
-    MemTracker* process_mem_tracker() {
-        return _mem_tracker.get();
-    }
-    PoolMemTrackerRegistry* pool_mem_trackers() { 
-        return _pool_mem_trackers.get(); 
-    }
-    ThreadResourceMgr* thread_mgr() {
-        return _thread_mgr.get();
-    }
-    PriorityThreadPool* thread_pool() {
-        return _thread_pool.get();
-    }
-    ThreadPool* etl_thread_pool() {
-        return _etl_thread_pool.get();
-    }
-    CgroupsMgr* cgroups_mgr() {
-        return _cgroups_mgr.get();
-    }
-    FragmentMgr* fragment_mgr() {
-        return _fragment_mgr.get();
-    }
-    TMasterInfo* master_info() {
-        return _master_info.get();
-    }
-    EtlJobMgr* etl_job_mgr() {
-        return _etl_job_mgr.get();
-    }
-    LoadPathMgr* load_path_mgr() {
-        return _load_path_mgr.get();
-    }
-    DiskIoMgr* disk_io_mgr() {
-        return _disk_io_mgr.get();
-    }
-    TmpFileMgr* tmp_file_mgr() {
-        return _tmp_file_mgr.get();
+    const std::string& token() const;
+    ExternalScanContextMgr* external_scan_context_mgr() { return _external_scan_context_mgr; }
+    DataStreamMgr* stream_mgr() { return _stream_mgr; }
+    ResultBufferMgr* result_mgr() { return _result_mgr; }
+    ResultQueueMgr* result_queue_mgr() { return _result_queue_mgr; }
+    ClientCache<BackendServiceClient>* client_cache() { return _backend_client_cache; }
+    ClientCache<FrontendServiceClient>* frontend_client_cache() { return _frontend_client_cache; }
+    ClientCache<TPaloBrokerServiceClient>* broker_client_cache() { return _broker_client_cache; }
+    ClientCache<TExtDataSourceServiceClient>* extdatasource_client_cache() {
+        return _extdatasource_client_cache;
     }
 
-    std::string* local_ip() {
-        return _local_ip.get();
+    // using template to simplify client cache management
+    template <typename T>
+    ClientCache<T>* get_client_cache() {
+        return nullptr;
     }
 
-    BfdParser* bfd_parser() const {
-        return _bfd_parser.get();
-    }
+    std::shared_ptr<MemTracker> process_mem_tracker() { return _mem_tracker; }
+    PoolMemTrackerRegistry* pool_mem_trackers() { return _pool_mem_trackers; }
+    ThreadResourceMgr* thread_mgr() { return _thread_mgr; }
+    PriorityThreadPool* thread_pool() { return _thread_pool; }
+    PriorityThreadPool* etl_thread_pool() { return _etl_thread_pool; }
+    CgroupsMgr* cgroups_mgr() { return _cgroups_mgr; }
+    FragmentMgr* fragment_mgr() { return _fragment_mgr; }
+    ResultCache* result_cache() { return _result_cache; }
+    TMasterInfo* master_info() { return _master_info; }
+    EtlJobMgr* etl_job_mgr() { return _etl_job_mgr; }
+    LoadPathMgr* load_path_mgr() { return _load_path_mgr; }
+    DiskIoMgr* disk_io_mgr() { return _disk_io_mgr; }
+    TmpFileMgr* tmp_file_mgr() { return _tmp_file_mgr; }
+    BfdParser* bfd_parser() const { return _bfd_parser; }
+    BrokerMgr* broker_mgr() const { return _broker_mgr; }
+    BrpcStubCache* brpc_stub_cache() const { return _brpc_stub_cache; }
+    ReservationTracker* buffer_reservation() { return _buffer_reservation; }
+    BufferPool* buffer_pool() { return _buffer_pool; }
+    LoadChannelMgr* load_channel_mgr() { return _load_channel_mgr; }
+    LoadStreamMgr* load_stream_mgr() { return _load_stream_mgr; }
+    SmallFileMgr* small_file_mgr() { return _small_file_mgr; }
+    FoldConstantMgr* fold_constant_mgr() { return _fold_constant_mgr; }
 
-    PullLoadTaskMgr* pull_load_task_mgr() const {
-        return _pull_load_task_mgr.get();
-    }
+    const std::vector<StorePath>& store_paths() const { return _store_paths; }
+    void set_store_paths(const std::vector<StorePath>& paths) { _store_paths = paths; }
+    StorageEngine* storage_engine() { return _storage_engine; }
+    void set_storage_engine(StorageEngine* storage_engine) { _storage_engine = storage_engine; }
 
-    BrokerMgr* broker_mgr() const {
-        return _broker_mgr.get();
-    }
+    StreamLoadExecutor* stream_load_executor() { return _stream_load_executor; }
+    RoutineLoadTaskExecutor* routine_load_task_executor() { return _routine_load_task_executor; }
+    HeartbeatFlags* heartbeat_flags() { return _heartbeat_flags; }
 
-    ConnectionManagerPtr get_conn_manager() {
-        return _conn_mgr;
-    }
+    PluginMgr* plugin_mgr() { return _plugin_mgr; }
 
-    void set_enable_webserver(bool enable) {
-        _enable_webserver = enable;
-    }
-
-    // Starts any dependent services in their correct order
-    virtual Status start_services();
-
-    // Initializes the exec env for running FE tests.
-    Status init_for_tests();
+    // The root tracker should be set before calling ExecEnv::init();
+    void set_root_mem_tracker(std::shared_ptr<MemTracker> root_tracker);
 
 private:
+    Status _init(const std::vector<StorePath>& store_paths);
+    void _destroy();
+
+    Status _init_mem_tracker();
+    /// Initialise 'buffer_pool_' and 'buffer_reservation_' with given capacity.
+    void _init_buffer_pool(int64_t min_page_len, int64_t capacity, int64_t clean_pages_limit);
+
+    void _register_metrics();
+    void _deregister_metrics();
+
+private:
+    bool _is_init;
+    std::vector<StorePath> _store_paths;
     // Leave protected so that subclasses can override
-    boost::scoped_ptr<DataStreamMgr> _stream_mgr;
-    boost::scoped_ptr<ResultBufferMgr> _result_mgr;
-    boost::scoped_ptr<BackendServiceClientCache> _client_cache;
-    boost::scoped_ptr<FrontendServiceClientCache> _frontend_client_cache;
-    std::unique_ptr<BrokerServiceClientCache>_broker_client_cache;
-    boost::scoped_ptr<Webserver> _webserver;
-    boost::scoped_ptr<WebPageHandler> _web_page_handler;
-    boost::scoped_ptr<MetricGroup> _metrics;
-    boost::scoped_ptr<MemTracker> _mem_tracker;
-    boost::scoped_ptr<PoolMemTrackerRegistry> _pool_mem_trackers;
-    boost::scoped_ptr<ThreadResourceMgr> _thread_mgr;
-    boost::scoped_ptr<PriorityThreadPool> _thread_pool;
-    boost::scoped_ptr<ThreadPool> _etl_thread_pool;
-    boost::scoped_ptr<CgroupsMgr> _cgroups_mgr;
-    boost::scoped_ptr<FragmentMgr> _fragment_mgr;
-    boost::scoped_ptr<TMasterInfo> _master_info;
-    boost::scoped_ptr<EtlJobMgr> _etl_job_mgr;
-    boost::scoped_ptr<std::string> _local_ip;
-    boost::scoped_ptr<LoadPathMgr> _load_path_mgr;
-    boost::scoped_ptr<DiskIoMgr> _disk_io_mgr;
-    boost::scoped_ptr<TmpFileMgr> _tmp_file_mgr;
+    ExternalScanContextMgr* _external_scan_context_mgr = nullptr;
+    DataStreamMgr* _stream_mgr = nullptr;
+    ResultBufferMgr* _result_mgr = nullptr;
+    ResultQueueMgr* _result_queue_mgr = nullptr;
+    ClientCache<BackendServiceClient>* _backend_client_cache = nullptr;
+    ClientCache<FrontendServiceClient>* _frontend_client_cache = nullptr;
+    ClientCache<TPaloBrokerServiceClient>* _broker_client_cache = nullptr;
+    ClientCache<TExtDataSourceServiceClient>* _extdatasource_client_cache = nullptr;
+    std::shared_ptr<MemTracker> _mem_tracker;
+    PoolMemTrackerRegistry* _pool_mem_trackers = nullptr;
+    ThreadResourceMgr* _thread_mgr = nullptr;
+    PriorityThreadPool* _thread_pool = nullptr;
+    PriorityThreadPool* _etl_thread_pool = nullptr;
+    CgroupsMgr* _cgroups_mgr = nullptr;
+    FragmentMgr* _fragment_mgr = nullptr;
+    ResultCache* _result_cache = nullptr;
+    TMasterInfo* _master_info = nullptr;
+    EtlJobMgr* _etl_job_mgr = nullptr;
+    LoadPathMgr* _load_path_mgr = nullptr;
+    DiskIoMgr* _disk_io_mgr = nullptr;
+    TmpFileMgr* _tmp_file_mgr = nullptr;
+    FoldConstantMgr* _fold_constant_mgr = nullptr;
 
-    std::unique_ptr<BfdParser> _bfd_parser;
-    std::unique_ptr<PullLoadTaskMgr> _pull_load_task_mgr;
-    std::unique_ptr<BrokerMgr> _broker_mgr;
-    bool _enable_webserver;
+    BfdParser* _bfd_parser = nullptr;
+    BrokerMgr* _broker_mgr = nullptr;
+    LoadChannelMgr* _load_channel_mgr = nullptr;
+    LoadStreamMgr* _load_stream_mgr = nullptr;
+    BrpcStubCache* _brpc_stub_cache = nullptr;
 
-    /*
-    Comm* comm;
-    DispatchHandlerPtr dhp;
-    ApplicationQueue *app_queue;
-    */
-    ConnectionManagerPtr _conn_mgr;
+    ReservationTracker* _buffer_reservation = nullptr;
+    BufferPool* _buffer_pool = nullptr;
 
-private:
-    static ExecEnv* _exec_env;
-    TimezoneDatabase _tz_database;
+    StorageEngine* _storage_engine = nullptr;
+
+    StreamLoadExecutor* _stream_load_executor = nullptr;
+    RoutineLoadTaskExecutor* _routine_load_task_executor = nullptr;
+    SmallFileMgr* _small_file_mgr = nullptr;
+    HeartbeatFlags* _heartbeat_flags = nullptr;
+
+    PluginMgr* _plugin_mgr = nullptr;
 };
 
+template <>
+inline ClientCache<BackendServiceClient>* ExecEnv::get_client_cache<BackendServiceClient>() {
+    return _backend_client_cache;
 }
+template <>
+inline ClientCache<FrontendServiceClient>* ExecEnv::get_client_cache<FrontendServiceClient>() {
+    return _frontend_client_cache;
+}
+template <>
+inline ClientCache<TPaloBrokerServiceClient>*
+ExecEnv::get_client_cache<TPaloBrokerServiceClient>() {
+    return _broker_client_cache;
+}
+template <>
+inline ClientCache<TExtDataSourceServiceClient>*
+ExecEnv::get_client_cache<TExtDataSourceServiceClient>() {
+    return _extdatasource_client_cache;
+}
+
+} // namespace doris
 
 #endif

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,15 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_RUNTIME_SPILL_SORTER_H
-#define BDG_PALO_BE_SRC_RUNTIME_SPILL_SORTER_H
+#ifndef DORIS_BE_SRC_RUNTIME_SPILL_SORTER_H
+#define DORIS_BE_SRC_RUNTIME_SPILL_SORTER_H
 
 #include <deque>
 
 #include "runtime/buffered_block_mgr2.h"
 #include "util/tuple_row_compare.h"
 
-namespace palo {
+namespace doris {
 
 class SortedRunMerger;
 class RuntimeProfile;
@@ -96,9 +93,9 @@ public:
     // _merge_batch_size is the size of the batches created to provide rows to the merger
     // and retrieve rows from an intermediate merger.
     SpillSorter(const TupleRowComparator& compare_less_than,
-            const std::vector<ExprContext*>& sort_tuple_slot_expr_ctxs,
-            RowDescriptor* output_row_desc, MemTracker* mem_tracker,
-            RuntimeProfile* profile, RuntimeState* state);
+                const std::vector<ExprContext*>& sort_tuple_slot_expr_ctxs,
+                RowDescriptor* output_row_desc, const std::shared_ptr<MemTracker>& mem_tracker,
+                RuntimeProfile* profile, RuntimeState* state);
 
     ~SpillSorter();
 
@@ -121,6 +118,7 @@ public:
     // may or may not have been called.
     Status reset();
 
+    bool is_spilled() { return _spilled; }
     // Estimate the memory overhead in bytes for an intermediate merge, based on the
     // maximum number of memory buffers available for the sort, the row descriptor for
     // the sorted tuples and the batch size used (in rows).
@@ -130,7 +128,7 @@ public:
     // to hold tuple rows from the input runs, and the merger itself deep-copies
     // sort-merged rows into its output batch.
     static uint64_t estimate_merge_mem(uint64_t available_blocks, RowDescriptor* row_desc,
-            int merge_batch_size);
+                                       int merge_batch_size);
 
 private:
     class Run;
@@ -174,7 +172,7 @@ private:
     std::vector<ExprContext*> _sort_tuple_slot_expr_ctxs;
 
     // Mem tracker for batches created during merge. Not owned by SpillSorter.
-    MemTracker* _mem_tracker;
+    std::shared_ptr<MemTracker> _mem_tracker;
 
     // Descriptor for the sort tuple. Input rows are materialized into 1 tuple before
     // sorting. Not owned by the SpillSorter.
@@ -215,8 +213,10 @@ private:
     RuntimeProfile::Counter* _num_merges_counter;
     RuntimeProfile::Counter* _in_mem_sort_timer;
     RuntimeProfile::Counter* _sorted_data_size;
+
+    bool _spilled;
 };
 
-} // namespace palo
+} // namespace doris
 
-#endif // BDG_PALO_BE_SRC_RUNTIME_SPILL_SORTER_H
+#endif // DORIS_BE_SRC_RUNTIME_SPILL_SORTER_H

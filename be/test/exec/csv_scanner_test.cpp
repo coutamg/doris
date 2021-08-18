@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,24 +16,20 @@
 // under the License.
 
 #include "exec/csv_scanner.h"
-#include "util/logging.h"
 
 #include <gtest/gtest.h>
 
-namespace palo {
+#include "util/logging.h"
+
+namespace doris {
 
 class CsvScannerTest : public testing::Test {
 public:
-    CsvScannerTest() {
-    }
+    CsvScannerTest() {}
 
 protected:
-    virtual void SetUp() {
-        init();
-    }
-    virtual void TearDown() {
-        system("rm -rf ./test_run");
-    }
+    virtual void SetUp() { init(); }
+    virtual void TearDown() { system("rm -rf ./test_run"); }
 
     void init();
 
@@ -93,16 +86,15 @@ TEST_F(CsvScannerTest, no_exist_files) {
     ASSERT_FALSE(status.ok());
 }
 
-} // end namespace palo
+} // end namespace doris
 
 int main(int argc, char** argv) {
-    // std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    // if (!palo::config::init(conffile.c_str(), false)) {
+    // std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    // if (!doris::config::init(conffile.c_str(), false)) {
     //     fprintf(stderr, "error read config file. \n");
     //     return -1;
     // }
-    palo::init_glog("be-test");
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
-

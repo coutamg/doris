@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,15 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_EXEC_SPILL_SORT_NODE_H
-#define BDG_PALO_BE_SRC_EXEC_SPILL_SORT_NODE_H
+#ifndef DORIS_BE_SRC_EXEC_SPILL_SORT_NODE_H
+#define DORIS_BE_SRC_EXEC_SPILL_SORT_NODE_H
 
 #include "exec/exec_node.h"
 #include "exec/sort_exec_exprs.h"
-#include "runtime/spill_sorter.h"
 #include "runtime/buffered_block_mgr2.h"
+#include "runtime/spill_sorter.h"
 
-namespace palo {
+namespace doris {
 
 // Node that implements a full sort of its input with a fixed memory budget, spilling
 // to disk if the input is larger than available memory.
@@ -42,7 +39,7 @@ public:
     SpillSortNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
     ~SpillSortNode();
 
-    virtual Status init(const TPlanNode& tnode);
+    virtual Status init(const TPlanNode& tnode, RuntimeState* state = nullptr);
     virtual Status prepare(RuntimeState* state);
     virtual Status open(RuntimeState* state);
     virtual Status get_next(RuntimeState* state, RowBatch* row_batch, bool* eos);
@@ -77,6 +74,6 @@ private:
     /////////////////////////////////////////
 };
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_EXEC_SPILL_SORT_NODE_H
+#endif // DORIS_BE_SRC_EXEC_SPILL_SORT_NODE_H

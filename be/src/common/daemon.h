@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,16 +15,43 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_COMMON_DAEMON_H
-#define BDG_PALO_BE_SRC_COMMON_COMMON_DAEMON_H
+#pragma once
 
-namespace palo {
+#include <memory>
+#include <vector>
 
-// Initialises logging, flags etc. Callers that want to override default gflags
-// variables should do so before calling this method; no logging should be
-// performed until after this method returns.
-void init_daemon(int argc, char** argv);
+#include "gutil/ref_counted.h"
+#include "util/countdown_latch.h"
+#include "util/thread.h"
 
-}
+namespace doris {
 
-#endif
+class StorePath;
+class Thread;
+
+class Daemon {
+public:
+    Daemon() : _stop_background_threads_latch(1) {}
+
+    // Initialises logging, flags etc. Callers that want to override default gflags
+    // variables should do so before calling this method; no logging should be
+    // performed until after this method returns.
+    void init(int argc, char** argv, const std::vector<StorePath>& paths);
+
+    // Start background threads
+    void start();
+
+    // Stop background threads
+    void stop();
+
+private:
+    void tcmalloc_gc_thread();
+    void memory_maintenance_thread();
+    void calculate_metrics_thread();
+
+    CountDownLatch _stop_background_threads_latch;
+    scoped_refptr<Thread> _tcmalloc_gc_thread;
+    scoped_refptr<Thread> _memory_maintenance_thread;
+    scoped_refptr<Thread> _calculate_metrics_thread;
+};
+} // namespace doris

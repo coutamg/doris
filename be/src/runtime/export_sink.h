@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_RUNTIME_EXPORT_SINK_H
-#define BDG_PALO_BE_SRC_RUNTIME_EXPORT_SINK_H
+#ifndef DORIS_BE_SRC_RUNTIME_EXPORT_SINK_H
+#define DORIS_BE_SRC_RUNTIME_EXPORT_SINK_H
 
 #include <vector>
 
@@ -26,7 +24,7 @@
 #include "exec/data_sink.h"
 #include "util/runtime_profile.h"
 
-namespace palo {
+namespace doris {
 
 class RowDescriptor;
 class TExpr;
@@ -40,9 +38,7 @@ class TupleRow;
 // This class is a sinker, which put export data to external storage by broker.
 class ExportSink : public DataSink {
 public:
-    ExportSink(ObjectPool* pool,
-                   const RowDescriptor& row_desc,
-                   const std::vector<TExpr>& t_exprs);
+    ExportSink(ObjectPool* pool, const RowDescriptor& row_desc, const std::vector<TExpr>& t_exprs);
 
     virtual ~ExportSink();
 
@@ -58,9 +54,7 @@ public:
     // hosts. Further send() calls are illegal after calling close().
     virtual Status close(RuntimeState* state, Status exec_status) override;
 
-    virtual RuntimeProfile* profile() {
-        return _profile;
-    }
+    virtual RuntimeProfile* profile() { return _profile; }
 
 private:
     Status open_file_writer();
@@ -81,13 +75,13 @@ private:
 
     RuntimeProfile* _profile;
 
-    std::unique_ptr<MemTracker> _mem_tracker;
+    std::shared_ptr<MemTracker> _mem_tracker;
 
     RuntimeProfile::Counter* _bytes_written_counter;
     RuntimeProfile::Counter* _rows_written_counter;
     RuntimeProfile::Counter* _write_timer;
 };
 
-} // end namespace palo
+} // end namespace doris
 
-#endif // BDG_PALO_BE_SRC_RUNTIME_EXPORT_SINK_H
+#endif // DORIS_BE_SRC_RUNTIME_EXPORT_SINK_H

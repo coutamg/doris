@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,37 +17,38 @@
 
 #include "util/path_builder.h"
 
-#include <sstream>
 #include <stdlib.h>
 
-namespace palo {
+#include <sstream>
 
-const char* PathBuilder::_s_palo_home;
+namespace doris {
 
-void PathBuilder::load_palo_home() {
-    if (_s_palo_home != NULL) {
+const char* PathBuilder::_s_doris_home;
+
+void PathBuilder::load_doris_home() {
+    if (_s_doris_home != NULL) {
         return;
     }
 
-    _s_palo_home = getenv("PALO_HOME");
+    _s_doris_home = getenv("DORIS_HOME");
 }
 
 void PathBuilder::get_full_path(const std::string& path, std::string* full_path) {
-    load_palo_home();
+    load_doris_home();
     std::stringstream s;
-    s << _s_palo_home << "/" << path;
+    s << _s_doris_home << "/" << path;
     *full_path = s.str();
 }
 
 void PathBuilder::get_full_build_path(const std::string& path, std::string* full_path) {
-    load_palo_home();
+    load_doris_home();
     std::stringstream s;
 #ifdef NDEBUG
-    s << _s_palo_home << "/be/build/release/" << path;
+    s << _s_doris_home << "/be/build/release/" << path;
 #else
-    s << _s_palo_home << "/be/build/debug/" << path;
+    s << _s_doris_home << "/be/build/debug/" << path;
 #endif
     *full_path = s.str();
 }
 
-}
+} // namespace doris

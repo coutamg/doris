@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,15 +17,16 @@
 
 #include "exprs/in_predicate.h"
 
-#include <string>
 #include <gtest/gtest.h>
 
+#include <string>
+
+#include "common/object_pool.h"
 #include "gen_cpp/Exprs_types.h"
 #include "gen_cpp/Types_types.h"
 #include "runtime/runtime_state.h"
-#include "common/object_pool.h"
 
-namespace palo {
+namespace doris {
 
 // mock
 class InPredicateTest : public testing::Test {
@@ -53,11 +51,8 @@ public:
     }
 
 protected:
-    virtual void SetUp() {
-        _data[0] = _data[1] = -1;
-    }
-    virtual void TearDown() {
-    }
+    virtual void SetUp() { _data[0] = _data[1] = -1; }
+    virtual void TearDown() {}
 
 private:
     TExprNode _in_node;
@@ -129,17 +124,17 @@ TEST_F(InPredicateTest, 100_const) {
     ASSERT_TRUE(*(bool*)in_pre.get_value(&_tuple_row));
 }
 
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
     init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
-    palo::CpuInfo::init();
+    doris::CpuInfo::init();
     return RUN_ALL_TESTS();
 }
 

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -19,103 +17,311 @@
 # under the License.
 
 ##############################################################
-# This script is used to compile Palo.
-# Usage:
-#    sh build.sh        build both Backend and Frontend.
-#    sh build.sh -clean clean previous output and build.
+# This script is used to compile Apache Doris(incubating).
+# Usage: 
+#    sh build.sh --help
+# Eg:
+#    sh build.sh                            build all
+#    sh build.sh  --be                      build Backend without clean
+#    sh build.sh  --fe --clean              clean and build Frontend and Spark Dpp application, without web UI
+#    sh build.sh  --fe --be --clean         clean and build Frontend, Spark Dpp application and Backend, without web UI
+#    sh build.sh  --spark-dpp               build Spark DPP application alone
+#    sh build.sh  --fe --ui                 build Frontend web ui with npm
+#    sh build.sh  --fe --be --ui --clean    clean and build Frontend, Spark Dpp application, Backend and web UI
 #
 # You need to make sure all thirdparty libraries have been
 # compiled and installed correctly.
 ##############################################################
 
 set -eo pipefail
+
 ROOT=`dirname "$0"`
 ROOT=`cd "$ROOT"; pwd`
-export PALO_HOME=$ROOT
 
-PARALLEL=4
+export DORIS_HOME=${ROOT}
 
-# Check java version
-if [ -z $JAVA_HOME ]; then
-    echo "Error: JAVA_HOME is not set."
-    exit 1
-fi
-JAVA=${JAVA_HOME}/bin/java
-JAVA_VER=$(${JAVA} -version 2>&1 | sed 's/.* version "\(.*\)\.\(.*\)\..*"/\1\2/; 1q')
-if [[ $JAVA_VER < 18 ]]; then
-    echo "Require JAVA with JDK version at least 1.8"
-    exit 1
-fi
-
-# Check ant
-if ! ant -version; then
-    echo "ant is not found."
-    exit 1
-fi
-
-cd ${PALO_HOME}
+. ${DORIS_HOME}/env.sh
 
 # Check args
-CLEAN_ALL=0
-if [ $# -ne 0 ]; then
-    if [ "$1"x == "-clean"x ]; then
-        CLEAN_ALL=1
-    fi
+usage() {
+  echo "
+Usage: $0 <options>
+  Optional options:
+     --be               build Backend
+     --fe               build Frontend and Spark Dpp application
+     --ui               build Frontend web ui with npm
+     --spark-dpp        build Spark DPP application
+     --clean            clean and build target
+     -j                 build Backend parallel
+
+  Eg.
+    $0                                      build all
+    $0 --be                                 build Backend without clean
+    $0 --fe --clean                         clean and build Frontend and Spark Dpp application, without web UI
+    $0 --fe --be --clean                    clean and build Frontend, Spark Dpp application and Backend, without web UI
+    $0 --spark-dpp                          build Spark DPP application alone
+    $0 --fe --ui                            build Frontend web ui with npm
+  "
+  exit 1
+}
+
+OPTS=$(getopt \
+  -n $0 \
+  -o '' \
+  -o 'h' \
+  -l 'be' \
+  -l 'fe' \
+  -l 'ui' \
+  -l 'spark-dpp' \
+  -l 'clean' \
+  -l 'help' \
+  -o 'j:' \
+  -- "$@")
+
+if [ $? != 0 ] ; then
+    usage
 fi
 
-echo "CLEAN_ALL:  "${CLEAN_ALL}
+eval set -- "$OPTS"
+
+PARALLEL=$[$(nproc)/4+1]
+BUILD_BE=
+BUILD_FE=
+BUILD_UI=
+BUILD_SPARK_DPP=
+CLEAN=
+HELP=0
+if [ $# == 1 ] ; then
+    # default
+    BUILD_BE=1
+    BUILD_FE=1
+    BUILD_UI=1
+    BUILD_SPARK_DPP=1
+    CLEAN=0
+else
+    BUILD_BE=0
+    BUILD_FE=0
+    BUILD_UI=0
+    BUILD_SPARK_DPP=0
+    CLEAN=0
+    while true; do
+        case "$1" in
+            --be) BUILD_BE=1 ; shift ;;
+            --fe) BUILD_FE=1 ; shift ;;
+            --ui) BUILD_UI=1 ; shift ;;
+            --spark-dpp) BUILD_SPARK_DPP=1 ; shift ;;
+            --clean) CLEAN=1 ; shift ;;
+            -h) HELP=1; shift ;;
+            --help) HELP=1; shift ;;
+            -j) PARALLEL=$2; shift 2 ;;
+            --) shift ;  break ;;
+            *) echo "Internal error" ; exit 1 ;;
+        esac
+    done
+fi
+
+if [[ ${HELP} -eq 1 ]]; then
+    usage
+    exit
+fi
+
+# build thirdparty libraries if necessary
+if [[ ! -f ${DORIS_THIRDPARTY}/installed/lib/libs2.a ]]; then
+    echo "Thirdparty libraries need to be build ..."
+    ${DORIS_THIRDPARTY}/build-thirdparty.sh -j $PARALLEL
+fi
+
+if [ ${CLEAN} -eq 1 -a ${BUILD_BE} -eq 0 -a ${BUILD_FE} -eq 0 -a ${BUILD_SPARK_DPP} -eq 0 ]; then
+    echo "--clean can not be specified without --fe or --be or --spark-dpp"
+    exit 1
+fi
+
+if [[ -z ${WITH_MYSQL} ]]; then
+    WITH_MYSQL=OFF
+fi
+if [[ -z ${GLIBC_COMPATIBILITY} ]]; then
+    GLIBC_COMPATIBILITY=ON
+fi
+if [[ -z ${USE_AVX2} ]]; then
+    USE_AVX2=ON
+fi
+if [[ -z ${WITH_LZO} ]]; then
+    WITH_LZO=OFF
+fi
+
+echo "Get params:
+    BUILD_BE            -- $BUILD_BE
+    BUILD_FE            -- $BUILD_FE
+    BUILD_UI            -- $BUILD_UI
+    BUILD_SPARK_DPP     -- $BUILD_SPARK_DPP
+    PARALLEL            -- $PARALLEL
+    CLEAN               -- $CLEAN
+    WITH_MYSQL          -- $WITH_MYSQL
+    WITH_LZO            -- $WITH_LZO
+    GLIBC_COMPATIBILITY -- $GLIBC_COMPATIBILITY
+    USE_AVX2            -- $USE_AVX2
+"
 
 # Clean and build generated code
 echo "Build generated code"
-cd ${PALO_HOME}/gensrc
-if [ ${CLEAN_ALL} -eq 1 ]; then
+cd ${DORIS_HOME}/gensrc
+if [ ${CLEAN} -eq 1 ]; then
    make clean
-fi 
+   rm -rf ${DORIS_HOME}/fe/fe-core/target
+fi
+# DO NOT using parallel make(-j) for gensrc
 make
-cd ${PALO_HOME}
+cd ${DORIS_HOME}
 
 # Clean and build Backend
-echo "Build Backend"
-if [ ${CLEAN_ALL} -eq 1 ]; then
-    rm ${PALO_HOME}/be/build/ -rf
-    rm ${PALO_HOME}/be/output/ -rf
+if [ ${BUILD_BE} -eq 1 ] ; then
+    CMAKE_BUILD_TYPE=${BUILD_TYPE:-Release}
+    echo "Build Backend: ${CMAKE_BUILD_TYPE}"
+    CMAKE_BUILD_DIR=${DORIS_HOME}/be/build_${CMAKE_BUILD_TYPE}
+    if [ ${CLEAN} -eq 1 ]; then
+        rm -rf $CMAKE_BUILD_DIR
+        rm -rf ${DORIS_HOME}/be/output/
+    fi
+    mkdir -p ${CMAKE_BUILD_DIR}
+    cd ${CMAKE_BUILD_DIR}
+    ${CMAKE_CMD} -G "${GENERATOR}"  \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DMAKE_TEST=OFF \
+            ${CMAKE_USE_CCACHE} \
+            -DWITH_MYSQL=${WITH_MYSQL} \
+            -DWITH_LZO=${WITH_LZO} \
+            -DUSE_AVX2=${USE_AVX2} \
+            -DGLIBC_COMPATIBILITY=${GLIBC_COMPATIBILITY} ../
+    ${BUILD_SYSTEM} -j ${PARALLEL}
+    ${BUILD_SYSTEM} install
+    cd ${DORIS_HOME}
 fi
-mkdir -p ${PALO_HOME}/be/build/
-cd ${PALO_HOME}/be/build/
-cmake ../
-make -j${PARALLEL}
-make install
-cd ${PALO_HOME}
 
 # Build docs, should be built before Frontend
 echo "Build docs"
-cd ${PALO_HOME}/docs
-if [ ${CLEAN_ALL} -eq 1 ]; then
-    make clean
+cd ${DORIS_HOME}/docs
+./build_help_zip.sh
+cd ${DORIS_HOME}
+
+# Assesmble FE modules
+FE_MODULES=
+if [ ${BUILD_FE} -eq 1 -o ${BUILD_SPARK_DPP} -eq 1 ]; then
+    if [ ${BUILD_SPARK_DPP} -eq 1 ]; then
+        FE_MODULES="fe-common,spark-dpp"
+    fi
+    if [ ${BUILD_FE} -eq 1 ]; then
+        FE_MODULES="fe-common,spark-dpp,fe-core"
+    fi
 fi
-make
-cd ${PALO_HOME}
+
+
+function build_ui() {
+    # check NPM env here, not in env.sh.
+    # Because UI should be considered a non-essential component at runtime.
+    # Only when the compilation is required, check the relevant compilation environment.
+    NPM=npm    
+    if ! ${NPM} --version; then
+        echo "Error: npm is not found"
+        exit 1
+    fi
+    if [[ ! -z ${CUSTOM_NPM_REGISTRY} ]]; then
+        ${NPM} config set registry ${CUSTOM_NPM_REGISTRY}
+        npm_reg=`${NPM} get registry`
+        echo "NPM registry: $npm_reg"
+    fi
+
+    echo "Build Frontend UI"
+    ui_dist=${DORIS_HOME}/ui/dist/
+    if [[ ! -z ${CUSTOM_UI_DIST} ]]; then
+        ui_dist=${CUSTOM_UI_DIST}
+    else 
+        cd ${DORIS_HOME}/ui
+        ${NPM} install
+        ${NPM} run build
+    fi
+    echo "ui dist: ${ui_dist}"
+    rm -rf ${DORIS_HOME}/fe/fe-core/src/main/resources/static/
+    mkdir -p ${DORIS_HOME}/fe/fe-core/src/main/resources/static
+    cp -r ${ui_dist}/* ${DORIS_HOME}/fe/fe-core/src/main/resources/static
+}
+
+# FE UI must be built before building FE
+if [ ${BUILD_UI} -eq 1 ] ; then 
+    build_ui
+fi
 
 # Clean and build Frontend
-echo "Build Frontend"
-cd ${PALO_HOME}/fe
-if [ ${CLEAN_ALL} -eq 1 ]; then
-    ant clean
+if [ ${FE_MODULES}x != ""x ]; then
+    echo "Build Frontend Modules: $FE_MODULES"
+    cd ${DORIS_HOME}/fe
+    if [ ${CLEAN} -eq 1 ]; then
+        ${MVN_CMD} clean
+    fi
+    ${MVN_CMD} package -pl ${FE_MODULES} -DskipTests
+    cd ${DORIS_HOME}
 fi
-ant install
-cd ${PALO_HOME}
 
 # Clean and prepare output dir
-PALO_OUTPUT=${PALO_HOME}/output/
-rm -rf ${PALO_OUTPUT}
-mkdir -p ${PALO_OUTPUT}
+DORIS_OUTPUT=${DORIS_HOME}/output/
+mkdir -p ${DORIS_OUTPUT}
 
-#Copy Frontend and Backend
-cp -R ${PALO_HOME}/fe/output ${PALO_OUTPUT}/fe
-cp -R ${PALO_HOME}/be/output ${PALO_OUTPUT}/be
+# Copy Frontend and Backend
+if [ ${BUILD_FE} -eq 1 -o ${BUILD_SPARK_DPP} -eq 1 ]; then
+    if [ ${BUILD_FE} -eq 1 ]; then
+        install -d ${DORIS_OUTPUT}/fe/bin ${DORIS_OUTPUT}/fe/conf \
+                   ${DORIS_OUTPUT}/fe/webroot/ ${DORIS_OUTPUT}/fe/lib/ \
+                   ${DORIS_OUTPUT}/fe/spark-dpp/
+
+        cp -r -p ${DORIS_HOME}/bin/*_fe.sh ${DORIS_OUTPUT}/fe/bin/
+        cp -r -p ${DORIS_HOME}/conf/fe.conf ${DORIS_OUTPUT}/fe/conf/
+        rm -rf ${DORIS_OUTPUT}/fe/lib/*
+        cp -r -p ${DORIS_HOME}/fe/fe-core/target/lib/* ${DORIS_OUTPUT}/fe/lib/
+        cp -r -p ${DORIS_HOME}/fe/fe-core/target/palo-fe.jar ${DORIS_OUTPUT}/fe/lib/
+        cp -r -p ${DORIS_HOME}/docs/build/help-resource.zip ${DORIS_OUTPUT}/fe/lib/
+        cp -r -p ${DORIS_HOME}/webroot/static ${DORIS_OUTPUT}/fe/webroot/
+        cp -r -p ${DORIS_HOME}/fe/spark-dpp/target/spark-dpp-*-jar-with-dependencies.jar ${DORIS_OUTPUT}/fe/spark-dpp/
+
+        cp -r -p ${DORIS_THIRDPARTY}/installed/webroot/* ${DORIS_OUTPUT}/fe/webroot/static/
+        mkdir -p ${DORIS_OUTPUT}/fe/log
+        mkdir -p ${DORIS_OUTPUT}/fe/doris-meta
+
+    elif [ ${BUILD_SPARK_DPP} -eq 1 ]; then
+        install -d ${DORIS_OUTPUT}/fe/spark-dpp/
+        rm -rf ${DORIS_OUTPUT}/fe/spark-dpp/*
+        cp -r -p ${DORIS_HOME}/fe/spark-dpp/target/spark-dpp-*-jar-with-dependencies.jar ${DORIS_OUTPUT}/fe/spark-dpp/
+    fi
+
+fi
+
+if [ ${BUILD_BE} -eq 1 ]; then
+    install -d ${DORIS_OUTPUT}/be/bin  \
+               ${DORIS_OUTPUT}/be/conf \
+               ${DORIS_OUTPUT}/be/lib/ \
+               ${DORIS_OUTPUT}/be/www  \
+               ${DORIS_OUTPUT}/udf/lib \
+               ${DORIS_OUTPUT}/udf/include
+
+    cp -r -p ${DORIS_HOME}/be/output/bin/* ${DORIS_OUTPUT}/be/bin/
+    cp -r -p ${DORIS_HOME}/be/output/conf/* ${DORIS_OUTPUT}/be/conf/
+    cp -r -p ${DORIS_HOME}/be/output/lib/* ${DORIS_OUTPUT}/be/lib/
+    cp -r -p ${DORIS_HOME}/be/output/udf/*.a ${DORIS_OUTPUT}/udf/lib/
+    cp -r -p ${DORIS_HOME}/be/output/udf/include/* ${DORIS_OUTPUT}/udf/include/
+    cp -r -p ${DORIS_HOME}/webroot/be/* ${DORIS_OUTPUT}/be/www/
+
+    cp -r -p ${DORIS_THIRDPARTY}/installed/webroot/* ${DORIS_OUTPUT}/be/www/
+    mkdir -p ${DORIS_OUTPUT}/be/log
+    mkdir -p ${DORIS_OUTPUT}/be/storage
+
+
+fi
 
 echo "***************************************"
-echo "Successfully build Palo."
+echo "Successfully build Doris"
 echo "***************************************"
+
+if [[ ! -z ${DORIS_POST_BUILD_HOOK} ]]; then
+    eval ${DORIS_POST_BUILD_HOOK}
+fi
 
 exit 0

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,7 +17,7 @@
 
 #include "exec/read_write_util.h"
 
-namespace palo {
+namespace doris {
 
 int ReadWriteUtil::put_zint(int32_t integer, uint8_t* buf) {
     // Move the sign bit to the first bit.
@@ -72,4 +69,4 @@ std::string ReadWriteUtil::hex_dump(const uint8_t* buf, int64_t length) {
 std::string ReadWriteUtil::hex_dump(const char* buf, int64_t length) {
     return hex_dump(reinterpret_cast<const uint8_t*>(buf), length);
 }
-}
+} // namespace doris

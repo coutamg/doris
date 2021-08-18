@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,18 +17,21 @@
 
 #include "util/internal_queue.h"
 
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
 #include <gtest/gtest.h>
 #include <unistd.h>
 
+#include <boost/thread.hpp>
+#include <mutex>
+
+#include "common/configbase.h"
+#include "test_util/test_util.h"
 #include "util/logging.h"
 
 using std::vector;
 using boost::thread;
 using boost::thread_group;
 
-namespace palo {
+namespace doris {
 
 struct IntNode : public InternalQueue<IntNode>::Node {
     IntNode() : value() {}
@@ -123,7 +123,7 @@ TEST(InternalQueue, TestBasic) {
 
 // Add all the nodes and then remove every other one.
 TEST(InternalQueue, TestRemove) {
-    vector<IntNode> nodes;
+    std::vector<IntNode> nodes;
     nodes.resize(100);
 
     InternalQueue<IntNode> queue;
@@ -157,12 +157,8 @@ TEST(InternalQueue, TestRemove) {
 const int VALIDATE_INTERVAL = 10000;
 
 // CHECK() is not thread safe so return the result in *failed.
-void ProducerThread(
-        InternalQueue<IntNode>* queue,
-        int num_inserts,
-        vector<IntNode>* nodes,
-        AtomicInt<int32_t>* counter,
-        bool* failed) {
+void ProducerThread(InternalQueue<IntNode>* queue, int num_inserts, std::vector<IntNode>* nodes,
+                    AtomicInt<int32_t>* counter, bool* failed) {
     for (int i = 0; i < num_inserts && !*failed; ++i) {
         // Get the next index to queue.
         AtomicInt<int32_t> value = (*counter)++;
@@ -176,17 +172,13 @@ void ProducerThread(
     }
 }
 
-void ConsumerThread(
-        InternalQueue<IntNode>* queue,
-        int num_consumes,
-        int delta,
-        vector<int>* results,
-        bool* failed) {
+void ConsumerThread(InternalQueue<IntNode>* queue, int num_consumes, int delta,
+                    std::vector<int>* results, bool* failed) {
     // Dequeued nodes should be strictly increasing.
     int previous_value = -1;
     for (int i = 0; i < num_consumes && !*failed;) {
         IntNode* node = queue->dequeue();
-        if (node == NULL){
+        if (node == NULL) {
             continue;
         }
         ++i;
@@ -202,7 +194,7 @@ void ConsumerThread(
         results->push_back(node->value);
         previous_value = node->value;
         if (i % VALIDATE_INTERVAL == 0) {
-            if (!queue->validate()){
+            if (!queue->validate()) {
                 *failed = true;
             }
         }
@@ -210,7 +202,7 @@ void ConsumerThread(
 }
 
 TEST(InternalQueue, TestClear) {
-    vector<IntNode> nodes;
+    std::vector<IntNode> nodes;
     nodes.resize(100);
     InternalQueue<IntNode> queue;
     queue.enqueue(&nodes[0]);
@@ -229,10 +221,10 @@ TEST(InternalQueue, TestClear) {
 }
 
 TEST(InternalQueue, TestSingleProducerSingleConsumer) {
-    vector<IntNode> nodes;
+    std::vector<IntNode> nodes;
     AtomicInt<int32_t> counter;
-    nodes.resize(1000000);
-    vector<int> results;
+    nodes.resize(LOOP_LESS_OR_MORE(100, 1000000));
+    std::vector<int> results;
 
     InternalQueue<IntNode> queue;
     bool failed = false;
@@ -254,8 +246,8 @@ TEST(InternalQueue, TestSingleProducerSingleConsumer) {
 }
 
 TEST(InternalQueue, TestMultiProducerMultiConsumer) {
-    vector<IntNode> nodes;
-    nodes.resize(1000000);
+    std::vector<IntNode> nodes;
+    nodes.resize(LOOP_LESS_OR_MORE(100, 1000000));
 
     bool failed = false;
     for (int num_producers = 1; num_producers < 5; num_producers += 3) {
@@ -266,7 +258,7 @@ TEST(InternalQueue, TestMultiProducerMultiConsumer) {
         const int num_per_consumer = nodes.size() / NUM_CONSUMERS;
         const int num_per_producer = nodes.size() / num_producers;
 
-        vector<vector<int> > results;
+        std::vector<vector<int>> results;
         results.resize(NUM_CONSUMERS);
 
         int expected_delta = -1;
@@ -289,13 +281,13 @@ TEST(InternalQueue, TestMultiProducerMultiConsumer) {
         thread_group producers;
 
         for (int i = 0; i < num_producers; ++i) {
-            producers.add_thread(new thread(
-                    ProducerThread, &queue, num_per_producer, &nodes, &counter, &failed));
+            producers.add_thread(new thread(ProducerThread, &queue, num_per_producer, &nodes,
+                                            &counter, &failed));
         }
 
         for (int i = 0; i < NUM_CONSUMERS; ++i) {
-            consumers.add_thread(new thread(ConsumerThread,
-                    &queue, num_per_consumer, expected_delta, &results[i], &failed));
+            consumers.add_thread(new thread(ConsumerThread, &queue, num_per_consumer,
+                                            expected_delta, &results[i], &failed));
         }
 
         producers.join_all();
@@ -303,7 +295,7 @@ TEST(InternalQueue, TestMultiProducerMultiConsumer) {
         ASSERT_TRUE(queue.empty());
         ASSERT_TRUE(!failed);
 
-        vector<int> all_results;
+        std::vector<int> all_results;
         for (int i = 0; i < NUM_CONSUMERS; ++i) {
             ASSERT_EQ(results[i].size(), num_per_consumer);
             all_results.insert(all_results.end(), results[i].begin(), results[i].end());
@@ -311,20 +303,20 @@ TEST(InternalQueue, TestMultiProducerMultiConsumer) {
         ASSERT_EQ(all_results.size(), nodes.size());
         sort(all_results.begin(), all_results.end());
         for (int i = 0; i < all_results.size(); ++i) {
-            ASSERT_EQ(i, all_results[i]) << all_results[i -1] << " " << all_results[i + 1];
+            ASSERT_EQ(i, all_results[i]) << all_results[i - 1] << " " << all_results[i + 1];
         }
     }
 }
 
-} // end namespace palo
+} // end namespace doris
 
 int main(int argc, char** argv) {
-    // std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    // if (!palo::config::init(conffile.c_str(), false)) {
-    //     fprintf(stderr, "error read config file. \n");
-    //     return -1;
-    // }
-    palo::init_glog("be-test");
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
+        fprintf(stderr, "error read config file. \n");
+        return -1;
+    }
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

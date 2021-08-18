@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,22 +15,24 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_EXPR_CONTEXT_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_EXPR_CONTEXT_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_EXPR_CONTEXT_H
+#define DORIS_BE_SRC_QUERY_EXPRS_EXPR_CONTEXT_H
 
 #include <memory>
 
 #include "common/status.h"
+#include "exprs/expr.h"
 #include "exprs/expr_value.h"
+#include "exprs/slot_ref.h"
 #include "udf/udf.h"
-#include "udf/udf_internal.h" // for ArrayVal
+#include "udf/udf_internal.h" // for CollectionVal
 
-#undef USING_PALO_UDF
-#define USING_PALO_UDF using namespace palo_udf
+#undef USING_DORIS_UDF
+#define USING_DORIS_UDF using namespace doris_udf
 
-USING_PALO_UDF;
+USING_DORIS_UDF;
 
-namespace palo {
+namespace doris {
 
 class Expr;
 class MemPool;
@@ -55,12 +54,15 @@ public:
     /// Prepare expr tree for evaluation.
     /// Allocations from this context will be counted against 'tracker'.
     Status prepare(RuntimeState* state, const RowDescriptor& row_desc,
-                   MemTracker* tracker);
+                   const std::shared_ptr<MemTracker>& tracker);
 
     /// Must be called after calling Prepare(). Does not need to be called on clones.
     /// Idempotent (this allows exprs to be opened multiple times in subplans without
     /// reinitializing function state).
     Status open(RuntimeState* state);
+
+    //TODO chenhao
+    static Status open(std::vector<ExprContext*> input_evals, RuntimeState* state);
 
     /// Creates a copy of this ExprContext. Open() must be called first. The copy contains
     /// clones of each FunctionContext, which share the fragment-local state of the
@@ -79,23 +81,6 @@ public:
     /// result in result_.
     void* get_value(TupleRow* row);
 
-    /// Convenience function: extract value into col_val and sets the
-    /// appropriate __isset flag.
-    /// If the value is NULL and as_ascii is false, nothing is set.
-    /// If 'as_ascii' is true, writes the value in ascii into stringVal
-    /// (nulls turn into "NULL");
-    /// if it is false, the specific field in col_val that receives the value is
-    /// based on the type of the expr:
-    /// TYPE_BOOLEAN: boolVal
-    /// TYPE_TINYINT/SMALLINT/INT: intVal
-    /// TYPE_BIGINT: longVal
-    /// TYPE_FLOAT/DOUBLE: doubleVal
-    /// TYPE_STRING: stringVal
-    /// TYPE_TIMESTAMP: stringVal
-    /// Note: timestamp is converted to string via RawValue::PrintValue because HiveServer2
-    /// requires timestamp in a string format.
-    void get_value(TupleRow* row, bool as_ascii, TColumnValue* col_val);
-
     /// Convenience functions: print value into 'str' or 'stream'.  NULL turns into "NULL".
     void print_value(TupleRow* row, std::string* str);
     void print_value(void* value, std::string* str);
@@ -106,10 +91,9 @@ public:
     /// retrieve the created context. Exprs that need a FunctionContext should call this in
     /// Prepare() and save the returned index. 'varargs_buffer_size', if specified, is the
     /// size of the varargs buffer in the created FunctionContext (see udf-internal.h).
-    int register_func(RuntimeState* state, 
-                 const FunctionContext::TypeDesc& return_type,
-                 const std::vector<FunctionContext::TypeDesc>& arg_types,
-                 int varargs_buffer_size);
+    int register_func(RuntimeState* state, const FunctionContext::TypeDesc& return_type,
+                      const std::vector<FunctionContext::TypeDesc>& arg_types,
+                      int varargs_buffer_size);
 
     /// Retrieves a registered FunctionContext. 'i' is the index returned by the call to
     /// register_func(). This should only be called by Exprs.
@@ -119,13 +103,9 @@ public:
         return _fn_contexts[i];
     }
 
-    Expr* root() { 
-        return _root; 
-    }
+    Expr* root() { return _root; }
 
-    bool closed() { 
-        return _closed; 
-    }
+    bool closed() { return _closed; }
 
     bool is_nullable();
 
@@ -138,10 +118,10 @@ public:
     FloatVal get_float_val(TupleRow* row);
     DoubleVal get_double_val(TupleRow* row);
     StringVal get_string_val(TupleRow* row);
-    // TODO(zc): 
+    // TODO(zc):
     // ArrayVal GetArrayVal(TupleRow* row);
     DateTimeVal get_datetime_val(TupleRow* row);
-    DecimalVal get_decimal_val(TupleRow* row);
+    DecimalV2Val get_decimalv2_val(TupleRow* row);
 
     /// Frees all local allocations made by fn_contexts_. This can be called when result
     /// data from this context is no longer needed.
@@ -149,13 +129,36 @@ public:
     static void free_local_allocations(const std::vector<ExprContext*>& ctxs);
     static void free_local_allocations(const std::vector<FunctionContext*>& ctxs);
 
-    static const char* _s_llvm_class_name;
+    bool opened() { return _opened; }
+
+    /// If 'expr' is constant, evaluates it with no input row argument and returns the
+    /// result in 'const_val'. Sets 'const_val' to NULL if the argument is not constant.
+    /// The returned AnyVal and associated varlen data is owned by this evaluator. This
+    /// should only be called after Open() has been called on this expr. Returns an error
+    /// if there was an error evaluating the expression or if memory could not be allocated
+    /// for the expression result.
+    Status get_const_value(RuntimeState* state, Expr& expr, AnyVal** const_val);
+
+    /// Returns an error status if there was any error in evaluating the expression
+    /// or its sub-expressions. 'start_idx' and 'end_idx' correspond to the range
+    /// within the vector of FunctionContext for the sub-expressions of interest.
+    /// The default parameters correspond to the entire expr 'root_'.
+    Status get_error(int start_idx, int end_idx) const;
+
+    std::string get_error_msg() const;
+
+    // when you reused this expr context, you maybe need clear the error status and message.
+    void clear_error_msg();
 
 private:
     friend class Expr;
     friend class ScalarFnCall;
     friend class InPredicate;
+    friend class RuntimePredicateWrapper;
+    friend class BloomFilterPredicate;
     friend class OlapScanNode;
+    friend class EsScanNode;
+    friend class EsPredicate;
 
     /// FunctionContexts for each registered expression. The FunctionContexts are created
     /// and owned by this ExprContext.
@@ -189,6 +192,13 @@ private:
     void* get_value(Expr* e, TupleRow* row);
 };
 
+inline void* ExprContext::get_value(TupleRow* row) {
+    if (_root->is_slotref()) {
+        return SlotRef::get_value(_root, row);
+    }
+    return get_value(_root, row);
 }
+
+} // namespace doris
 
 #endif

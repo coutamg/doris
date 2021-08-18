@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,7 +17,7 @@
 
 #include "udf/udf_internal.h"
 
-namespace palo_udf {
+namespace doris_udf {
 bool FunctionContext::is_arg_constant(int i) const {
     if (i < 0 || i >= _impl->_constant_args.size()) {
         return false;
@@ -37,6 +34,10 @@ AnyVal* FunctionContext::get_constant_arg(int i) const {
 
 int FunctionContext::get_num_args() const {
     return _impl->_arg_types.size();
+}
+
+int FunctionContext::get_num_constant_args() const {
+    return _impl->_constant_args.size();
 }
 
 const FunctionContext::TypeDesc& FunctionContext::get_return_type() const {
@@ -58,4 +59,4 @@ void* FunctionContext::get_function_state(FunctionStateScope scope) const {
     }
 }
 
-}
+} // namespace doris_udf

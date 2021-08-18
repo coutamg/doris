@@ -1,6 +1,3 @@
-# Modifications copyright (C) 2017, Baidu.com, Inc.
-# Copyright 2017 The Apache Software Foundation
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -25,7 +22,6 @@ set(LIBRARY_OUTPUT_PATH "${BUILD_DIR}/src/exprs")
 set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/src/exprs")
 
 add_library(Exprs
-  base64.cpp
   encryption_functions.cpp
   aggregate_functions.cpp
   agg_fn_evaluator.cpp
@@ -38,13 +34,21 @@ add_library(Exprs
   compound_predicate.cpp
   conditional_functions.cpp
   conditional_functions_ir.cpp
-  decimal_operators.cpp
+  decimalv2_operators.cpp
+  time_operators.cpp
+  es_functions.cpp
+  hash_functions.cpp
   literal.cpp
   expr.cpp
   expr_ir.cpp
   expr_context.cpp
   in_predicate.cpp
   new_in_predicate.cpp
+  bloomfilter_predicate.cpp
+  block_bloom_filter_avx_impl.cc
+  block_bloom_filter_impl.cc
+  runtime_filter.cpp
+  runtime_filter_rpc.cpp
   is_null_predicate.cpp
   like_predicate.cpp
   math_functions.cpp
@@ -52,20 +56,19 @@ add_library(Exprs
   scalar_fn_call.cpp
   slot_ref.cpp
   string_functions.cpp
+  array_functions.cpp
   timestamp_functions.cpp
-  timezone_db.cpp
   tuple_is_null_predicate.cpp
   udf_builtins.cpp
   utility_functions.cpp
   info_func.cpp
-  hybird_set.cpp
+  hybrid_set.cpp
   json_functions.cpp
   operators.cpp
   hll_hash_function.cpp
-)
-#ADD_BE_TEST(json_function_test)
-#ADD_BE_TEST(binary_predicate_test)
-#ADD_BE_TEST(in_predicate_test)
-#ADD_BE_TEST(expr-test)
-#ADD_BE_TEST(hybird_set_test)
-#ADD_BE_TEST(in-predicate-test)
+  agg_fn.cc
+  new_agg_fn_evaluator.cc
+  bitmap_function.cpp
+  hll_function.cpp
+  grouping_sets_functions.cpp
+  topn_function.cpp)

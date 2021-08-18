@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,20 +15,18 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_COMPOUND_PREDICATE_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_COMPOUND_PREDICATE_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_COMPOUND_PREDICATE_H
+#define DORIS_BE_SRC_QUERY_EXPRS_COMPOUND_PREDICATE_H
 
 #include <string>
+
+#include "common/object_pool.h"
 #include "exprs/predicate.h"
 #include "gen_cpp/Exprs_types.h"
 
-namespace llvm {
-class Function;
-}
+namespace doris {
 
-namespace palo {
-
-class CompoundPredicate: public Predicate {
+class CompoundPredicate : public Predicate {
 public:
     static void init();
     static BooleanVal compound_not(FunctionContext* context, const BooleanVal&);
@@ -41,33 +36,26 @@ protected:
 
     CompoundPredicate(const TExprNode& node);
 
-    Status codegen_compute_fn(bool and_fn, RuntimeState* state, llvm::Function** fn);
     // virtual Status prepare(RuntimeState* state, const RowDescriptor& desc);
     virtual std::string debug_string() const;
 
-    virtual bool is_vectorized() const {
-        return false;
-    }
+    virtual bool is_vectorized() const { return false; }
 
 private:
     friend class OpcodeRegistry;
 };
 
 /// Expr for evaluating and (&&) operators
-class AndPredicate: public CompoundPredicate {
+class AndPredicate : public CompoundPredicate {
 public:
-    virtual Expr* clone(ObjectPool* pool) const override { 
+    virtual Expr* clone(ObjectPool* pool) const override {
         return pool->add(new AndPredicate(*this));
     }
-    virtual palo_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
-
-    virtual Status get_codegend_compute_fn(RuntimeState* state, llvm::Function** fn) {
-        return CompoundPredicate::codegen_compute_fn(true, state, fn);
-    }
+    virtual doris_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
 
 protected:
     friend class Expr;
-    AndPredicate(const TExprNode& node) : CompoundPredicate(node) { }
+    AndPredicate(const TExprNode& node) : CompoundPredicate(node) {}
 
     virtual std::string debug_string() const {
         std::stringstream out;
@@ -80,20 +68,16 @@ private:
 };
 
 /// Expr for evaluating or (||) operators
-class OrPredicate: public CompoundPredicate {
+class OrPredicate : public CompoundPredicate {
 public:
-    virtual Expr* clone(ObjectPool* pool) const override { 
+    virtual Expr* clone(ObjectPool* pool) const override {
         return pool->add(new OrPredicate(*this));
     }
-    virtual palo_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
-
-    virtual Status get_codegend_compute_fn(RuntimeState* state, llvm::Function** fn) {
-        return CompoundPredicate::codegen_compute_fn(false, state, fn);
-    }
+    virtual doris_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
 
 protected:
     friend class Expr;
-    OrPredicate(const TExprNode& node) : CompoundPredicate(node) { }
+    OrPredicate(const TExprNode& node) : CompoundPredicate(node) {}
 
     virtual std::string debug_string() const {
         std::stringstream out;
@@ -106,20 +90,16 @@ private:
 };
 
 /// Expr for evaluating or (||) operators
-class NotPredicate: public CompoundPredicate {
+class NotPredicate : public CompoundPredicate {
 public:
-    virtual Expr* clone(ObjectPool* pool) const override { 
+    virtual Expr* clone(ObjectPool* pool) const override {
         return pool->add(new NotPredicate(*this));
     }
-    virtual palo_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
-
-    virtual Status get_codegend_compute_fn(RuntimeState* state, llvm::Function** fn) {
-        return get_codegend_compute_fn_wrapper(state, fn);
-    }
+    virtual doris_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
 
 protected:
     friend class Expr;
-    NotPredicate(const TExprNode& node) : CompoundPredicate(node) { }
+    NotPredicate(const TExprNode& node) : CompoundPredicate(node) {}
 
     virtual std::string debug_string() const {
         std::stringstream out;
@@ -130,6 +110,6 @@ protected:
 private:
     friend class OpcodeRegistry;
 };
-}
+} // namespace doris
 
 #endif

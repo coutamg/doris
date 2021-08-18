@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,8 +15,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-namespace cpp palo
-namespace java com.baidu.palo.thrift
+namespace cpp doris
+namespace java org.apache.doris.thrift
 
 include "AgentService.thrift"
 include "PaloInternalService.thrift"
@@ -34,6 +31,13 @@ struct TTabletInfo {
     5: required Types.TCount row_count
     6: required Types.TSize data_size
     7: optional Types.TStorageMedium storage_medium
+    8: optional list<Types.TTransactionId> transaction_ids
+    9: optional i64 version_count
+    10: optional i64 path_hash
+    11: optional bool version_miss
+    12: optional bool used
+    13: optional Types.TPartitionId partition_id
+    14: optional bool is_in_memory
 }
 
 struct TFinishTaskRequest {
@@ -47,6 +51,12 @@ struct TFinishTaskRequest {
     8: optional i64 request_version
     9: optional i64 request_version_hash
     10: optional string snapshot_path
+    11: optional list<Types.TTabletId> error_tablet_ids
+    12: optional list<string> snapshot_files
+    13: optional map<Types.TTabletId, list<string>> tablet_files
+    14: optional list<Types.TTabletId> downloaded_tablet_ids
+    15: optional i64 copy_size
+    16: optional i64 copy_time_ms
 }
 
 struct TTablet {
@@ -55,9 +65,17 @@ struct TTablet {
 
 struct TDisk {
     1: required string root_path
-    2: required Types.TSize total_capacity
-    3: required Types.TSize available_capacity
+    2: required Types.TSize disk_total_capacity
+    3: required Types.TSize data_used_capacity
     4: required bool used
+    5: optional Types.TSize disk_available_capacity
+    6: optional i64 path_hash
+    7: optional Types.TStorageMedium storage_medium
+}
+
+struct TPluginInfo {
+    1: required string plugin_name
+    2: required i32 type
 }
 
 struct TReportRequest {
@@ -66,6 +84,11 @@ struct TReportRequest {
     3: optional map<Types.TTaskType, set<i64>> tasks // string signature
     4: optional map<Types.TTabletId, TTablet> tablets
     5: optional map<string, TDisk> disks // string root_path
+    6: optional bool force_recovery
+    7: optional list<TTablet> tablet_list
+    // the max compaction score of all tablets on a backend,
+    // this field should be set along with tablet report
+    8: optional i64 tablet_max_compaction_score
 }
 
 struct TMasterResult {

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,40 +15,39 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <iostream>
-#include <stdlib.h>
-#include <stdio.h>
-#include <vector>
-#include <gtest/gtest.h>
-
 #include "exec/olap_scan_node.h"
+
+#include <gtest/gtest.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <iostream>
+#include <vector>
+
 #include "exec/text_converter.hpp"
 #include "exprs/binary_predicate.h"
-#include "exprs/int_literal.h"
 #include "exprs/in_predicate.h"
-#include "gen_cpp/PlanNodes_types.h"
+#include "exprs/int_literal.h"
 #include "gen_cpp/PlanNodes_types.h"
 #include "gen_cpp/Types_types.h"
-#include "runtime/primitive_type.h"
+#include "runtime/descriptors.h"
 #include "runtime/exec_env.h"
-#include "runtime/runtime_state.h"
+#include "runtime/primitive_type.h"
 #include "runtime/row_batch.h"
+#include "runtime/runtime_state.h"
 #include "runtime/string_value.h"
 #include "runtime/tuple_row.h"
-#include "runtime/descriptors.h"
 #include "util/cpu_info.h"
-#include "util/runtime_profile.h"
-#include "util/runtime_profile.h"
 #include "util/debug_util.h"
+#include "util/runtime_profile.h"
 
-namespace palo {
+namespace doris {
 
 class OlapScanNodeTest : public ::testing::Test {
 public:
-    OlapScanNodeTest() : _runtime_stat("test") { }
+    OlapScanNodeTest() : _runtime_stat("test") {}
 
     virtual void SetUp() {
-
         TUniqueId fragment_id;
         TQueryOptions query_options;
         query_options.disable_codegen = true;
@@ -173,30 +169,28 @@ public:
 
         {
             TScanRangeParams param;
-            TPaloScanRange palo_scan_range;
+            TPaloScanRange doris_scan_range;
             TNetworkAddress host;
             host.__set_hostname("host");
             host.__set_port(9999);
-            palo_scan_range.hosts.push_back(host);
-            palo_scan_range.__set_schema_hash("462300563");
-            palo_scan_range.__set_version("94");
-            palo_scan_range.__set_version_hash("422202811388534102");
-            palo_scan_range.engine_table_name.push_back("PaloTestStats");
-            palo_scan_range.__set_db_name("olap");
+            doris_scan_range.hosts.push_back(host);
+            doris_scan_range.__set_schema_hash("462300563");
+            doris_scan_range.__set_version("94");
+            doris_scan_range.__set_version_hash("0");
+            doris_scan_range.engine_table_name.push_back("DorisTestStats");
+            doris_scan_range.__set_db_name("olap");
             //TKeyRange key_range;
             //key_range.__set_column_type(to_thrift(TYPE_BIGINT));
             //key_range.__set_begin_key(-5000);
             //key_range.__set_end_key(5000);
             //key_range.__set_column_name("UrlId");
-            //palo_scan_range.partition_column_ranges.push_back(key_range);
-            param.scan_range.__set_palo_scan_range(palo_scan_range);
+            //doris_scan_range.partition_column_ranges.push_back(key_range);
+            param.scan_range.__set_doris_scan_range(doris_scan_range);
             _scan_ranges.push_back(param);
-
         }
     }
 
-    virtual void TearDown() {
-    }
+    virtual void TearDown() {}
 
 private:
     TPlanNode _tnode;
@@ -239,7 +233,6 @@ TEST_F(OlapScanNodeTest, NormalUse) {
 }
 
 TEST_F(OlapScanNodeTest, PushDownBinaryPredicate) {
-
     OlapScanNode scan_node(&_obj_pool, _tnode, *_desc_tbl);
 
     TExprNode binary_node;
@@ -305,7 +298,6 @@ TEST_F(OlapScanNodeTest, PushDownBinaryPredicate) {
 }
 
 TEST_F(OlapScanNodeTest, PushDownBinaryEqualPredicate) {
-
     OlapScanNode scan_node(&_obj_pool, _tnode, *_desc_tbl);
 
     TExprNode binary_node;
@@ -371,7 +363,6 @@ TEST_F(OlapScanNodeTest, PushDownBinaryEqualPredicate) {
 }
 
 TEST_F(OlapScanNodeTest, PushDownInPredicateCase) {
-
     OlapScanNode scan_node(&_obj_pool, _tnode, *_desc_tbl);
 
     TExprNode in_node;
@@ -436,16 +427,16 @@ TEST_F(OlapScanNodeTest, PushDownInPredicateCase) {
     ASSERT_TRUE(scan_node.close(&_runtime_stat).ok());
 }
 
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }
     init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
-    palo::CpuInfo::Init();
+    doris::CpuInfo::Init();
     return RUN_ALL_TESTS();
 }

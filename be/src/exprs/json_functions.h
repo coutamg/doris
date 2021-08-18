@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,38 +15,113 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_JSON_FUNCTIONS_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_JSON_FUNCTIONS_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_JSON_FUNCTIONS_H
+#define DORIS_BE_SRC_QUERY_EXPRS_JSON_FUNCTIONS_H
 
 #include <rapidjson/document.h>
+
+#include "fmt/format.h"
 #include "runtime/string_value.h"
 
-namespace palo {
+namespace doris {
 
 enum JsonFunctionType {
-    JSON_FUN_INT = 0, JSON_FUN_DOUBLE, JSON_FUN_STRING
+    JSON_FUN_INT = 0,
+    JSON_FUN_DOUBLE,
+    JSON_FUN_STRING,
+
+    JSON_FUN_UNKNOWN //The last
 };
 
 class Expr;
 class OpcodeRegistry;
 class TupleRow;
 
+struct JsonPath {
+    std::string key; // key of a json object
+    int idx;         // array index of a json array, -1 means not set, -2 means *
+    bool is_valid;   // true if the path is successfully parsed
+
+    JsonPath(const std::string& key_, int idx_, bool is_valid_)
+            : key(key_), idx(idx_), is_valid(is_valid_) {}
+
+    JsonPath(std::string&& key_, int idx_, bool is_valid_)
+            : key(std::move(key_)), idx(idx_), is_valid(is_valid_) {}
+
+    std::string to_string() const {
+        std::stringstream ss;
+        if (!is_valid) {
+            return "INVALID";
+        }
+        if (!key.empty()) {
+            ss << key;
+        }
+        if (idx == -2) {
+            ss << "[*]";
+        } else if (idx > -1) {
+            ss << "[" << idx << "]";
+        }
+        return ss.str();
+    }
+
+    std::string debug_string() const {
+        return fmt::format("key:{}, idx:{}, valid:{}", key, idx, is_valid);
+    }
+};
+
 class JsonFunctions {
 public:
     static void init();
-    static palo_udf::IntVal get_json_int(
-        palo_udf::FunctionContext* context, const palo_udf::StringVal& json_str,
-        const palo_udf::StringVal& path);
-    static palo_udf::StringVal get_json_string(
-        palo_udf::FunctionContext* context, const palo_udf::StringVal& json_str,
-        const palo_udf::StringVal& path);
-    static palo_udf::DoubleVal get_json_double(
-        palo_udf::FunctionContext* context, const palo_udf::StringVal& json_str,
-        const palo_udf::StringVal& path);
+    static doris_udf::IntVal get_json_int(doris_udf::FunctionContext* context,
+                                          const doris_udf::StringVal& json_str,
+                                          const doris_udf::StringVal& path);
+    static doris_udf::StringVal get_json_string(doris_udf::FunctionContext* context,
+                                                const doris_udf::StringVal& json_str,
+                                                const doris_udf::StringVal& path);
+    static doris_udf::DoubleVal get_json_double(doris_udf::FunctionContext* context,
+                                                const doris_udf::StringVal& json_str,
+                                                const doris_udf::StringVal& path);
 
-    static rapidjson::Value* get_json_object(
-            const std::string& json_string, const std::string& path_string,
-            const JsonFunctionType& fntype, rapidjson::Document* document);
+    static rapidjson::Value* get_json_object(FunctionContext* context,
+                                             const std::string_view& json_string,
+                                             const std::string_view& path_string,
+                                             const JsonFunctionType& fntype,
+                                             rapidjson::Document* document);
+
+    /**
+     * The `document` parameter must be has parsed.
+     * return Value Is Array object
+     */
+    static rapidjson::Value* get_json_array_from_parsed_json(
+            const std::vector<JsonPath>& parsed_paths, rapidjson::Value* document,
+            rapidjson::Document::AllocatorType& mem_allocator);
+
+    // this is only for test, it will parse the json path inside,
+    // so that we can easily pass a json path as string.
+    static rapidjson::Value* get_json_array_from_parsed_json(
+            const std::string& jsonpath, rapidjson::Value* document,
+            rapidjson::Document::AllocatorType& mem_allocator);
+
+    static rapidjson::Value* get_json_object_from_parsed_json(
+            const std::vector<JsonPath>& parsed_paths, rapidjson::Value* document,
+            rapidjson::Document::AllocatorType& mem_allocator);
+
+    static void json_path_prepare(doris_udf::FunctionContext*,
+                                  doris_udf::FunctionContext::FunctionStateScope);
+
+    static void json_path_close(doris_udf::FunctionContext*,
+                                doris_udf::FunctionContext::FunctionStateScope);
+
+    static void parse_json_paths(const std::string& path_strings,
+                                 std::vector<JsonPath>* parsed_paths);
+
+private:
+    static rapidjson::Value* match_value(const std::vector<JsonPath>& parsed_paths,
+                                         rapidjson::Value* document,
+                                         rapidjson::Document::AllocatorType& mem_allocator,
+                                         bool is_insert_null = false);
+    static void get_parsed_paths(const std::vector<std::string>& path_exprs,
+                                 std::vector<JsonPath>* parsed_paths);
 };
-}
+} // namespace doris
 #endif

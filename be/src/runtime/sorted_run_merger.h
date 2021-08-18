@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,16 +15,16 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_RUNTIME_SORTED_RUN_MERGER_H
-#define BDG_PALO_BE_SRC_RUNTIME_SORTED_RUN_MERGER_H
+#ifndef DORIS_BE_SRC_RUNTIME_SORTED_RUN_MERGER_H
+#define DORIS_BE_SRC_RUNTIME_SORTED_RUN_MERGER_H
 
 #include <boost/scoped_ptr.hpp>
-#include <boost/thread/mutex.hpp>
+#include <mutex>
 
 #include "common/object_pool.h"
 #include "util/tuple_row_compare.h"
 
-namespace palo {
+namespace doris {
 
 class RowBatch;
 class RowDescriptor;
@@ -49,27 +46,33 @@ public:
     // Function that returns the next batch of rows from an input sorted run. The batch
     // is owned by the supplier (i.e. not SortedRunMerger). eos is indicated by an NULL
     // batch being returned.
-    typedef boost::function<Status (RowBatch**)> RunBatchSupplier;
+    typedef std::function<Status(RowBatch**)> RunBatchSupplier;
 
     SortedRunMerger(const TupleRowComparator& compare_less_than, RowDescriptor* row_desc,
-            RuntimeProfile* profile, bool deep_copy_input);
+                    RuntimeProfile* profile, bool deep_copy_input);
 
-    ~SortedRunMerger() {}
+    virtual ~SortedRunMerger() = default;
 
     // Prepare this merger to merge and return rows from the sorted runs in 'input_runs'.
     // Retrieves the first batch from each run and sets up the binary heap implementing
     // the priority queue.
-    Status prepare(const std::vector<RunBatchSupplier>& input_runs);
+    Status prepare(const std::vector<RunBatchSupplier>& input_runs, bool parallel = false);
 
     // Return the next batch of sorted rows from this merger.
     Status get_next(RowBatch* output_batch, bool* eos);
+
+    // Only Child class implement this Method, Return the next batch of sorted rows from this merger.
+    virtual Status get_batch(RowBatch** output_batch) {
+        return Status::InternalError("no support method get_batch(RowBatch** output_batch)");
+    }
 
     // Called to finalize a merge when deep_copy is false. Transfers resources from
     // all input batches to the specified output batch.
     void transfer_all_resources(RowBatch* transfer_resource_batch);
 
-private:
+protected:
     class BatchedRowSupplier;
+    class ParallelBatchedRowSupplier;
 
     // Assuming the element at parent_index is the only out of place element in the heap,
     // restore the heap property (i.e. swap elements so parent <= children).
@@ -104,6 +107,26 @@ private:
     RuntimeProfile::Counter* _get_next_batch_timer;
 };
 
-} // namespace palo
+class ChildSortedRunMerger : public SortedRunMerger {
+public:
+    ChildSortedRunMerger(const TupleRowComparator& compare_less_than, RowDescriptor* row_desc,
+                         RuntimeProfile* profile, MemTracker* _parent, uint32_t row_batch_size,
+                         bool deep_copy_input);
 
-#endif // BDG_PALO_BE_SRC_RUNTIME_SORTED_RUN_MERGER_H
+    Status get_batch(RowBatch** output_batch) override;
+
+private:
+    // Ptr to prevent mem leak for api get_batch(Rowbatch**)
+    std::unique_ptr<RowBatch> _current_row_batch;
+
+    // The data in merger is exhaust
+    bool _eos = false;
+
+    MemTracker* _parent;
+
+    uint32_t _row_batch_size;
+};
+
+} // namespace doris
+
+#endif // DORIS_BE_SRC_RUNTIME_SORTED_RUN_MERGER_H

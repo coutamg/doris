@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,13 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include <gtest/gtest.h>
 #include "runtime/raw_value.h"
 
-namespace palo {
+#include <gtest/gtest.h>
 
-class RawValueTest : public testing::Test {
-};
+namespace doris {
+
+class RawValueTest : public testing::Test {};
 
 TEST_F(RawValueTest, Compare) {
     int64_t v1;
@@ -45,11 +42,11 @@ TEST_F(RawValueTest, Compare) {
     EXPECT_LT(RawValue::compare(&i2, &i1, TYPE_INT), 0);
 }
 
-}
+} // namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }

@@ -1,5 +1,3 @@
-# Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -22,59 +20,105 @@ set(LIBRARY_OUTPUT_PATH "${BUILD_DIR}/src/olap")
 
 # where to put generated binaries
 set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/src/olap")
-  
+
+add_subdirectory(rowset)
+add_subdirectory(fs)
+add_subdirectory(memory)
+
 add_library(Olap STATIC
-    olap_reader.cpp
-    base_expansion_handler.cpp
-    command_executor.cpp
-    cumulative_handler.cpp
+    aggregate_func.cpp
+    base_compaction.cpp
+    base_tablet.cpp
+    bloom_filter.hpp
+    bloom_filter_reader.cpp
+    bloom_filter_writer.cpp
+    block_column_predicate.cpp
+    byte_buffer.cpp
+    collect_iterator.cpp
+    compaction.cpp
+    compaction_permit_limiter.cpp
+    comparison_predicate.cpp
+    compress.cpp
+    cumulative_compaction.cpp
+    cumulative_compaction_policy.cpp
     delete_handler.cpp
-    field.cpp
+    delta_writer.cpp
     file_helper.cpp
-    i_data.cpp
+    file_stream.cpp
+    generic_iterators.cpp
+    hll.cpp
+    in_list_predicate.cpp
+    bloom_filter_predicate.cpp
+    in_stream.cpp
+    key_coder.cpp
     lru_cache.cpp
-    olap_main.cpp
+    memtable.cpp
+    memtable_flush_executor.cpp
     merger.cpp
+    null_predicate.cpp
     olap_cond.cpp
-    olap_data.cpp
-    olap_engine.cpp
-    olap_header.cpp
     olap_index.cpp
-    olap_rootpath.cpp
+    olap_meta.cpp
     olap_server.cpp
-    olap_snapshot.cpp
-    olap_table.cpp
+    options.cpp
+    out_stream.cpp
+    page_cache.cpp
     push_handler.cpp
     reader.cpp
     row_block.cpp
+    row_block2.cpp
     row_cursor.cpp
+    version_graph.cpp
+    schema.cpp
     schema_change.cpp
+    serialize.cpp
+    storage_engine.cpp
+    data_dir.cpp
+    short_key_index.cpp
+    snapshot_manager.cpp
+    stream_index_common.cpp
+    stream_index_reader.cpp
+    stream_index_writer.cpp
+    stream_name.cpp
+    tablet.cpp
+    tablet_manager.cpp
+    tablet_meta.cpp
+    tablet_meta_manager.cpp
+    tablet_schema.cpp
+    tablet_sync_service.cpp
+    txn_manager.cpp
+    types.cpp 
     utils.cpp
-    writer.cpp
-    column_file/bit_field_reader.cpp
-    column_file/bit_field_writer.cpp
-    column_file/bloom_filter.hpp
-    column_file/bloom_filter_reader.cpp
-    column_file/bloom_filter_writer.cpp
-    column_file/byte_buffer.cpp
-    column_file/column_data.cpp
-    column_file/column_reader.cpp
-    column_file/column_writer.cpp
-    column_file/compress.cpp
-    column_file/data_writer.cpp
-    column_file/file_stream.cpp
-    column_file/in_stream.cpp
-    column_file/out_stream.cpp
-    column_file/run_length_byte_reader.cpp
-    column_file/run_length_byte_writer.cpp
-    column_file/run_length_integer_reader.cpp
-    column_file/run_length_integer_writer.cpp
-    column_file/segment_reader.cpp
-    column_file/segment_writer.cpp
-    column_file/serialize.cpp
-    column_file/stream_index_common.cpp
-    column_file/stream_index_reader.cpp
-    column_file/stream_index_writer.cpp
-    column_file/stream_name.cpp
+    wrapper_field.cpp
+    rowset/segment_v2/bitmap_index_reader.cpp
+    rowset/segment_v2/bitmap_index_writer.cpp
+    rowset/segment_v2/bitshuffle_page.cpp
+    rowset/segment_v2/bitshuffle_wrapper.cpp
+    rowset/segment_v2/column_reader.cpp
+    rowset/segment_v2/column_writer.cpp
+    rowset/segment_v2/encoding_info.cpp
+    rowset/segment_v2/index_page.cpp
+    rowset/segment_v2/indexed_column_reader.cpp
+    rowset/segment_v2/indexed_column_writer.cpp
+    rowset/segment_v2/ordinal_page_index.cpp
+    rowset/segment_v2/page_io.cpp
+    rowset/segment_v2/binary_dict_page.cpp
+    rowset/segment_v2/binary_prefix_page.cpp
+    rowset/segment_v2/segment.cpp
+    rowset/segment_v2/segment_iterator.cpp
+    rowset/segment_v2/empty_segment_iterator.cpp
+    rowset/segment_v2/segment_writer.cpp
+    rowset/segment_v2/block_split_bloom_filter.cpp
+    rowset/segment_v2/bloom_filter_index_reader.cpp
+    rowset/segment_v2/bloom_filter_index_writer.cpp
+    rowset/segment_v2/bloom_filter.cpp
+    rowset/segment_v2/zone_map_index.cpp
+    task/engine_batch_load_task.cpp
+    task/engine_checksum_task.cpp
+    task/engine_clone_task.cpp
+    task/engine_storage_migration_task.cpp
+    task/engine_publish_version_task.cpp
+    task/engine_alter_tablet_task.cpp
+    olap_snapshot_converter.cpp
+    column_vector.cpp
 )
-

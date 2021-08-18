@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -23,17 +20,18 @@
 
 #include <boost/algorithm/string.hpp>
 #include <cmath>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
 
 #include "gen_cpp/RuntimeProfile_types.h"
 #include "util/cpu_info.h"
 #include "util/template_util.h"
+#include "util/binary_cast.hpp"
 
 /// Truncate a double to offset decimal places.
-#define DOUBLE_TRUNCATE(val, offset) floor(val * pow(10, offset)) / pow(10, offset)
+#define DOUBLE_TRUNCATE(val, offset) floor(val* pow(10, offset)) / pow(10, offset)
 
-namespace palo {
+namespace doris {
 
 /// Methods for printing numeric values with optional units, or other types with an
 /// applicable operator<<.
@@ -49,9 +47,9 @@ public:
     /// i.e. for bytes: 3145728 -> 3MB
     /// If verbose is true, this also prints the raw value (before unit conversion) for
     /// types where this is applicable.
-    template<typename T>
+    template <typename T>
     static ENABLE_IF_ARITHMETIC(T, std::string)
-    print(T value, TUnit::type unit, bool verbose = false) {
+            print(T value, TUnit::type unit, bool verbose = false) {
         std::stringstream ss;
         ss.flags(std::ios::fixed);
         switch (unit) {
@@ -102,11 +100,10 @@ public:
             } else if (value >= MILLION) {
                 /// if the time is over a ms, print it up to microsecond in the unit of ms.
                 ss << DOUBLE_TRUNCATE(static_cast<double>(value) / MILLION, TIME_NS_PRECISION)
-                    << "ms";
+                   << "ms";
             } else if (value > 1000) {
                 /// if the time is over a microsecond, print it using unit microsecond
-                ss << DOUBLE_TRUNCATE(static_cast<double>(value) / 1000, TIME_NS_PRECISION)
-                    << "us";
+                ss << DOUBLE_TRUNCATE(static_cast<double>(value) / 1000, TIME_NS_PRECISION) << "us";
             } else {
                 ss << DOUBLE_TRUNCATE(value, TIME_NS_PRECISION) << "ns";
             }
@@ -144,7 +141,7 @@ public:
 
         /// TODO: Remove DOUBLE_VALUE. IMPALA-1649
         case TUnit::DOUBLE_VALUE: {
-            double output = *reinterpret_cast<double*>(&value);
+            double output = binary_cast<T, double>(value);
             ss << std::setprecision(PRECISION) << output << " ";
             break;
         }
@@ -160,9 +157,8 @@ public:
     //
     /// TODO: There's no good is_string equivalent, so there's a needless copy for strings
     /// here.
-    template<typename T>
-    static ENABLE_IF_NOT_ARITHMETIC(T, std::string)
-    print(const T& value, TUnit::type unit) {
+    template <typename T>
+    static ENABLE_IF_NOT_ARITHMETIC(T, std::string) print(const T& value, TUnit::type unit) {
         std::stringstream ss;
         ss << std::boolalpha << value;
         return ss.str();
@@ -170,8 +166,7 @@ public:
 
     /// Utility method to print an iterable type to a stringstream like [v1, v2, v3]
     template <typename I>
-    static void print_stringList(const I& iterable, TUnit::type unit,
-            std::stringstream* out) {
+    static void print_stringList(const I& iterable, TUnit::type unit, std::stringstream* out) {
         std::vector<std::string> strings;
         for (typename I::const_iterator it = iterable.begin(); it != iterable.end(); ++it) {
             std::stringstream ss;
@@ -179,7 +174,7 @@ public:
             strings.push_back(ss.str());
         }
 
-        (*out) <<"[" << boost::algorithm::join(strings, ", ") << "]";
+        (*out) << "[" << boost::algorithm::join(strings, ", ") << "]";
     }
 
     /// Convenience method
@@ -209,13 +204,13 @@ private:
             return value;
         } else if (value >= GIGABYTE) {
             *unit = "GB";
-            return value / (double) GIGABYTE;
-        } else if (value >= MEGABYTE ) {
+            return value / (double)GIGABYTE;
+        } else if (value >= MEGABYTE) {
             *unit = "MB";
-            return value / (double) MEGABYTE;
-        } else if (value >= KILOBYTE)  {
+            return value / (double)MEGABYTE;
+        } else if (value >= KILOBYTE) {
             *unit = "KB";
-            return value / (double) KILOBYTE;
+            return value / (double)KILOBYTE;
         } else {
             *unit = "B";
             return value;
@@ -283,6 +278,6 @@ private:
     }
 };
 
-}
+} // namespace doris
 
 #endif

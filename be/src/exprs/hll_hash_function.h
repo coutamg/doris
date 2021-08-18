@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,31 +15,26 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_HLL_HASH_FUNCTION_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_HLL_HASH_FUNCTION_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_HLL_HASH_FUNCTION_H
+#define DORIS_BE_SRC_QUERY_EXPRS_HLL_HASH_FUNCTION_H
 
-#include "runtime/primitive_type.h"
+#include "exprs/anyval_util.h"
 #include "udf/udf.h"
 #include "util/hash_util.hpp"
-#include "exprs/anyval_util.h"
-#include "runtime/datetime_value.h"
 
-namespace palo {
+namespace doris {
 
 class Expr;
-class OpcodeRegistry;
 class TupleRow;
 
+// todo(kks): for backward compatibility, we should remove this class
+//            when doris 0.12 release
 class HllHashFunctions {
 public:
     static void init();
-    static StringVal hll_hash(palo_udf::FunctionContext* ctx, 
-                              const palo_udf::StringVal& dest_base);
-    static StringVal hll_cardinality(palo_udf::FunctionContext* ctx, 
-                                     const palo_udf::StringVal& dest_base);
-    static StringVal create_string_result(palo_udf::FunctionContext* ctx, 
-                                          const StringVal& str, const bool is_null);
+    static StringVal hll_hash(FunctionContext* ctx, const StringVal& dest_base);
+    static BigIntVal hll_cardinality(FunctionContext* ctx, const HllVal& dest_base);
 };
-}
+} // namespace doris
 
 #endif

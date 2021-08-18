@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,27 +17,27 @@
 
 #include "exec/csv_scan_node.h"
 
-#include <vector>
+#include <gtest/gtest.h>
 
 #include <boost/scoped_ptr.hpp>
-#include <gtest/gtest.h>
+#include <vector>
 
 #include "gen_cpp/PlanNodes_types.h"
 #include "gen_cpp/Types_types.h"
 #include "runtime/row_batch.h"
 #include "runtime/runtime_state.h"
 #include "runtime/tuple_row.h"
+#include "util/cpu_info.h"
 #include "util/debug_util.h"
 #include "util/disk_info.h"
-#include "util/cpu_info.h"
 #include "util/logging.h"
 
-namespace palo {
+namespace doris {
 
 class CsvScanNodeTest : public testing::Test {
 public:
-    CsvScanNodeTest(){}
-    ~CsvScanNodeTest(){}
+    CsvScanNodeTest() {}
+    ~CsvScanNodeTest() {}
 
 protected:
     virtual void SetUp() {
@@ -78,8 +76,7 @@ void CsvScanNodeTest::init() {
 }
 
 void CsvScanNodeTest::init_runtime_state() {
-    _state = _obj_pool.add(
-            new RuntimeState(TUniqueId(), TQueryOptions(), "", _env.get()));
+    _state = _obj_pool.add(new RuntimeState(TUniqueId(), TQueryOptions(), "", _env.get()));
     _state->set_desc_tbl(_desc_tbl);
     _state->_load_dir = "./test_run/output/";
     _state->init_mem_trackers(TUniqueId());
@@ -125,7 +122,7 @@ void CsvScanNodeTest::init_desc_tbl() {
     {
         TSlotDescriptor t_slot_desc;
         t_slot_desc.__set_id(i);
-        TTypeDesc ttype = gen_type_desc(TPrimitiveType::DECIMAL);
+        TTypeDesc ttype = gen_type_desc(TPrimitiveType::DECIMALV2);
         ttype.types[0].scalar_type.__set_precision(10);
         ttype.types[0].scalar_type.__set_scale(5);
         t_slot_desc.__set_slotType(ttype);
@@ -138,7 +135,7 @@ void CsvScanNodeTest::init_desc_tbl() {
         t_slot_desc.__set_colName("decimal_column");
 
         slot_descs.push_back(t_slot_desc);
-        offset += sizeof(DecimalValue);
+        offset += sizeof(DecimalValueV2);
     }
     ++i;
     // date_column
@@ -210,7 +207,7 @@ void CsvScanNodeTest::init_desc_tbl() {
     }
     {
         TColumnType column_type;
-        column_type.__set_type(TPrimitiveType::DECIMAL);
+        column_type.__set_type(TPrimitiveType::DECIMALV2);
         column_type.__set_precision(10);
         column_type.__set_scale(5);
         column_type_map["decimal_column"] = column_type;
@@ -239,7 +236,6 @@ void CsvScanNodeTest::init_desc_tbl() {
     _tnode.csv_scan_node.__isset.default_values = true;
     _tnode.csv_scan_node.max_filter_ratio = 0.5;
     _tnode.__isset.csv_scan_node = true;
-
 }
 
 TEST_F(CsvScanNodeTest, NormalUse) {
@@ -254,7 +250,8 @@ TEST_F(CsvScanNodeTest, NormalUse) {
     status = scan_node.open(_state);
     ASSERT_TRUE(status.ok());
 
-    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), new MemTracker(-1));
+    auto tracker = std::make_shared<MemTracker>();
+    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), tracker.get());
     bool eos = false;
 
     while (!eos) {
@@ -271,9 +268,8 @@ TEST_F(CsvScanNodeTest, NormalUse) {
             std::cout << "input row: " << print_row(row, scan_node._row_descriptor) << std::endl;
 
             if (i == 0) {
-                ASSERT_EQ(
-                        std::string("[(1 -12345.67891 2015-04-20 abc\0\0)]", 35),
-                        print_row(row, scan_node._row_descriptor));
+                ASSERT_EQ(std::string("[(1 -12345.67891 2015-04-20 abc\0\0)]", 35),
+                          print_row(row, scan_node._row_descriptor));
             }
         }
     }
@@ -293,7 +289,7 @@ TEST_F(CsvScanNodeTest, continuousDelim) {
     status = scan_node.open(_state);
     ASSERT_TRUE(status.ok());
 
-    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), new MemTracker(-1));
+    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), tracker.get());
     bool eos = false;
 
     while (!eos) {
@@ -310,9 +306,8 @@ TEST_F(CsvScanNodeTest, continuousDelim) {
             std::cout << "input row: " << print_row(row, scan_node._row_descriptor) << std::endl;
 
             if (i == 0) {
-                ASSERT_EQ(
-                        std::string("[(1 -12345.67891 2015-04-20 \0\0\0\0\0)]", 35),
-                        print_row(row, scan_node._row_descriptor));
+                ASSERT_EQ(std::string("[(1 -12345.67891 2015-04-20 \0\0\0\0\0)]", 35),
+                          print_row(row, scan_node._row_descriptor));
             }
         }
     }
@@ -332,7 +327,8 @@ TEST_F(CsvScanNodeTest, wrong_decimal_format_test) {
     status = scan_node.open(_state);
     ASSERT_TRUE(status.ok());
 
-    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), new MemTracker(-1));
+    auto tracker = std::make_shared<MemTracker>();
+    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), tracker.get());
     bool eos = false;
 
     while (!eos) {
@@ -360,7 +356,8 @@ TEST_F(CsvScanNodeTest, fill_fix_len_stringi_test) {
     status = scan_node.open(_state);
     ASSERT_TRUE(status.ok());
 
-    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), new MemTracker(-1));
+    auto tracker = std::make_shared<MemTracker>();
+    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), tracker.get());
     bool eos = false;
 
     while (!eos) {
@@ -378,12 +375,11 @@ TEST_F(CsvScanNodeTest, fill_fix_len_stringi_test) {
             std::cout << "input row: " << print_row(row, scan_node._row_descriptor) << std::endl;
 
             if (i == 0) {
-                ASSERT_EQ(std::string(
-                        "[(1 12345.67891 2015-04-20 ab\0\0\0)]", 34),
-                        print_row(row, scan_node._row_descriptor));
+                ASSERT_EQ(std::string("[(1 12345.67891 2015-04-20 ab\0\0\0)]", 34),
+                          print_row(row, scan_node._row_descriptor));
                 Tuple* tuple = row->get_tuple(0);
-                StringValue* str_slot
-                        = tuple->get_string_slot(_t_desc_table.slotDescriptors[3].byteOffset);
+                StringValue* str_slot =
+                        tuple->get_string_slot(_t_desc_table.slotDescriptors[3].byteOffset);
                 std::cout << "str_slot len: " << str_slot->len << std::endl;
                 ASSERT_EQ(5, str_slot->len);
             }
@@ -405,7 +401,8 @@ TEST_F(CsvScanNodeTest, wrong_fix_len_string_format_test) {
     status = scan_node.open(_state);
     ASSERT_TRUE(status.ok());
 
-    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), new MemTracker(-1));
+    auto tracker = std::make_shared<MemTracker>();
+    RowBatch row_batch(scan_node._row_descriptor, _state->batch_size(), tracker.get());
     bool eos = false;
 
     while (!eos) {
@@ -427,22 +424,22 @@ TEST_F(CsvScanNodeTest, wrong_fix_len_string_format_test) {
 // 3. 文件中有但表中没有的列，导入命令中跳过该列
 // 4. max_filter_ratio
 
-} // end namespace palo
+} // end namespace doris
 
 int main(int argc, char** argv) {
-    // std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    // if (!palo::config::init(conffile.c_str(), false)) {
+    // std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    // if (!doris::config::init(conffile.c_str(), false)) {
     //     fprintf(stderr, "error read config file. \n");
     //     return -1;
     // }
-    palo::config::read_size = 8388608;
-    palo::config::min_buffer_size = 1024;
+    doris::config::read_size = 8388608;
+    doris::config::min_buffer_size = 1024;
 
-    palo::init_glog("be-test");
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
 
-    palo::CpuInfo::init();
-    palo::DiskInfo::init();
+    doris::CpuInfo::init();
+    doris::DiskInfo::init();
 
     return RUN_ALL_TESTS();
 }

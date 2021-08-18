@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -22,16 +19,11 @@
 
 #include <ostream>
 #include <sstream>
-#include <boost/foreach.hpp>
 
-#include "codegen/llvm_codegen.h"
+namespace doris {
 
-namespace palo {
-
-const char* TypeDescriptor::s_llvm_class_name = "struct.palo::TypeDescriptor";
-
-TypeDescriptor::TypeDescriptor(const std::vector<TTypeNode>& types, int* idx) : 
-        len(-1), precision(-1), scale(-1) {
+TypeDescriptor::TypeDescriptor(const std::vector<TTypeNode>& types, int* idx)
+        : len(-1), precision(-1), scale(-1) {
     DCHECK_GE(*idx, 0);
     DCHECK_LT(*idx, types.size());
     const TTypeNode& node = types[*idx];
@@ -43,12 +35,20 @@ TypeDescriptor::TypeDescriptor(const std::vector<TTypeNode>& types, int* idx) :
         if (type == TYPE_CHAR || type == TYPE_VARCHAR || type == TYPE_HLL) {
             DCHECK(scalar_type.__isset.len);
             len = scalar_type.len;
-        } else if (type == TYPE_DECIMAL) {
+        } else if (type == TYPE_DECIMALV2) {
             DCHECK(scalar_type.__isset.precision);
             DCHECK(scalar_type.__isset.scale);
             precision = scalar_type.precision;
             scale = scalar_type.scale;
         }
+        break;
+    }
+    case TTypeNodeType::ARRAY: {
+        DCHECK(!node.__isset.scalar_type);
+        DCHECK_LT(*idx, types.size() - 1);
+        type = TYPE_ARRAY;
+        ++(*idx);
+        children.push_back(TypeDescriptor(types, idx));
         break;
     }
 #if 0 // Don't support now
@@ -99,23 +99,78 @@ void TypeDescriptor::to_thrift(TTypeDesc* thrift_type) const {
                 node.struct_fields.back().name = field_name;
             }
         }
-        BOOST_FOREACH(const TypeDescriptor& child, children) {
+        for (const TypeDescriptor& child : children) {
             child.to_thrift(thrift_type);
         }
     } else {
         node.type = TTypeNodeType::SCALAR;
         node.__set_scalar_type(TScalarType());
         TScalarType& scalar_type = node.scalar_type;
-        scalar_type.__set_type(palo::to_thrift(type));
+        scalar_type.__set_type(doris::to_thrift(type));
         if (type == TYPE_CHAR || type == TYPE_VARCHAR || type == TYPE_HLL) {
             // DCHECK_NE(len, -1);
             scalar_type.__set_len(len);
-        } else if (type == TYPE_DECIMAL) {
+        } else if (type == TYPE_DECIMALV2) {
             DCHECK_NE(precision, -1);
             DCHECK_NE(scale, -1);
             scalar_type.__set_precision(precision);
             scalar_type.__set_scale(scale);
         }
+    }
+}
+
+void TypeDescriptor::to_protobuf(PTypeDesc* ptype) const {
+    DCHECK(!is_complex_type() || type == TYPE_ARRAY)
+            << "Don't support complex type now, type=" << type;
+    auto node = ptype->add_types();
+    node->set_type(TTypeNodeType::SCALAR);
+    auto scalar_type = node->mutable_scalar_type();
+    scalar_type->set_type(doris::to_thrift(type));
+    if (type == TYPE_CHAR || type == TYPE_VARCHAR || type == TYPE_HLL) {
+        scalar_type->set_len(len);
+    } else if (type == TYPE_DECIMALV2) {
+        DCHECK_NE(precision, -1);
+        DCHECK_NE(scale, -1);
+        scalar_type->set_precision(precision);
+        scalar_type->set_scale(scale);
+    } else if (type == TYPE_ARRAY) {
+        node->set_type(TTypeNodeType::ARRAY);
+        for (const TypeDescriptor& child : children) {
+            child.to_protobuf(ptype);
+        }
+    }
+}
+
+TypeDescriptor::TypeDescriptor(const google::protobuf::RepeatedPtrField<PTypeNode>& types, int* idx)
+        : len(-1), precision(-1), scale(-1) {
+    DCHECK_GE(*idx, 0);
+    DCHECK_LT(*idx, types.size());
+
+    const PTypeNode& node = types.Get(*idx);
+    switch (node.type()) {
+    case TTypeNodeType::SCALAR: {
+        DCHECK(node.has_scalar_type());
+        const PScalarType& scalar_type = node.scalar_type();
+        type = thrift_to_type((TPrimitiveType::type)scalar_type.type());
+        if (type == TYPE_CHAR || type == TYPE_VARCHAR || type == TYPE_HLL) {
+            DCHECK(scalar_type.has_len());
+            len = scalar_type.len();
+        } else if (type == TYPE_DECIMALV2) {
+            DCHECK(scalar_type.has_precision());
+            DCHECK(scalar_type.has_scale());
+            precision = scalar_type.precision();
+            scale = scalar_type.scale();
+        }
+        break;
+    }
+    case TTypeNodeType::ARRAY: {
+        type = TYPE_ARRAY;
+        ++(*idx);
+        children.push_back(TypeDescriptor(types, idx));
+        break;
+    }
+    default:
+        DCHECK(false) << node.type();
     }
 }
 
@@ -125,8 +180,11 @@ std::string TypeDescriptor::debug_string() const {
     case TYPE_CHAR:
         ss << "CHAR(" << len << ")";
         return ss.str();
-    case TYPE_DECIMAL:
-        ss << "DECIMAL(" << precision << ", " << scale << ")";
+    case TYPE_DECIMALV2:
+        ss << "DECIMALV2(" << precision << ", " << scale << ")";
+        return ss.str();
+    case TYPE_ARRAY:
+        ss << "ARRAY(" << type_to_string(children[0].type) << ")";
         return ss.str();
     default:
         return type_to_string(type);
@@ -134,36 +192,8 @@ std::string TypeDescriptor::debug_string() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const TypeDescriptor& type) {
-  os << type.debug_string();
-  return os;
+    os << type.debug_string();
+    return os;
 }
 
-llvm::ConstantStruct* TypeDescriptor::to_ir(LlvmCodeGen* codegen) const {
-    // ColumnType = { i32, i32, i32, i32, <vector>, <vector> }
-    llvm::StructType* column_type_type = llvm::cast<llvm::StructType>(
-        codegen->get_type(s_llvm_class_name));
-
-    DCHECK_EQ(sizeof(type), sizeof(int32_t));
-    llvm::Constant* type_field = llvm::ConstantInt::get(codegen->int_type(), type);
-    DCHECK_EQ(sizeof(len), sizeof(int32_t));
-    llvm::Constant* len_field = llvm::ConstantInt::get(codegen->int_type(), len);
-    DCHECK_EQ(sizeof(precision), sizeof(int32_t));
-    llvm::Constant* precision_field = llvm::ConstantInt::get(codegen->int_type(), precision);
-    DCHECK_EQ(sizeof(scale), sizeof(int32_t));
-    llvm::Constant* scale_field = llvm::ConstantInt::get(codegen->int_type(), scale);
-
-    // Create empty 'children' and 'field_names' vectors
-    DCHECK(children.empty()) << "Nested types NYI";
-    DCHECK(field_names.empty()) << "Nested types NYI";
-    llvm::Constant* children_field = llvm::Constant::getNullValue(
-        column_type_type->getElementType(4));
-    llvm::Constant* field_names_field =
-        llvm::Constant::getNullValue(column_type_type->getElementType(5));
-
-    return llvm::cast<llvm::ConstantStruct>(llvm::ConstantStruct::get(
-            column_type_type, type_field, len_field,
-            precision_field, scale_field, children_field, field_names_field, NULL));
-}
-
-}
-
+} // namespace doris

@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,27 +15,23 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "runtime/decimal_value.h"
+#include <gtest/gtest.h>
 
 #include <iostream>
 #include <string>
 
-#include <gtest/gtest.h>
-
+#include "runtime/decimalv2_value.h"
 #include "util/logging.h"
 
-namespace palo {
+namespace doris {
 
 class DecimalValueTest : public testing::Test {
 public:
-    DecimalValueTest() {
-    }
+    DecimalValueTest() {}
 
 protected:
-    virtual void SetUp() {
-    }
-    virtual void TearDown() {
-    }
+    virtual void SetUp() {}
+    virtual void TearDown() {}
 };
 
 TEST_F(DecimalValueTest, string_to_decimal) {
@@ -96,7 +89,6 @@ TEST_F(DecimalValueTest, negative_zero) {
         ASSERT_FALSE(!(value <= value3));
         ASSERT_FALSE(!(value3 > value));
         ASSERT_FALSE(!(value3 >= value));
-
     }
     {
         // from int
@@ -184,14 +176,14 @@ TEST_F(DecimalValueTest, int_to_decimal) {
 }
 
 TEST_F(DecimalValueTest, add) {
-    DecimalValue value11(std::string("1111111111.2222222222"));// 10 digits
+    DecimalValue value11(std::string("1111111111.2222222222")); // 10 digits
     DecimalValue value12(std::string("2222222222.1111111111")); // 10 digits
     DecimalValue add_result1 = value11 + value12;
     std::cout << "add_result1: " << add_result1.get_debug_info() << std::endl;
     ASSERT_EQ("3333333333.3333333333", add_result1.to_string(10));
 
-    DecimalValue value21(std::string("-3333333333.2222222222"));// 10 digits
-    DecimalValue value22(std::string("2222222222.1111111111")); // 10 digits
+    DecimalValue value21(std::string("-3333333333.2222222222")); // 10 digits
+    DecimalValue value22(std::string("2222222222.1111111111"));  // 10 digits
     DecimalValue add_result2 = value21 + value22;
     std::cout << "add_result2: " << add_result2.get_debug_info() << std::endl;
     ASSERT_EQ("-1111111111.1111111111", add_result2.to_string(10));
@@ -208,7 +200,7 @@ TEST_F(DecimalValueTest, compound_add) {
 }
 
 TEST_F(DecimalValueTest, sub) {
-    DecimalValue value11(std::string("3333333333.2222222222"));// 10 digits
+    DecimalValue value11(std::string("3333333333.2222222222")); // 10 digits
     DecimalValue value12(std::string("2222222222.1111111111")); // 10 digits
     DecimalValue sub_result1 = value11 - value12;
     std::cout << "sub_result1: " << sub_result1.get_debug_info() << std::endl;
@@ -231,12 +223,12 @@ TEST_F(DecimalValueTest, sub) {
     }
     // minimum - maximal
     {
-        DecimalValue value1(std::string(
-                "9999999999999999999999999999999999999999"
-                "99999999999999999999999999999999999999999")); // 81 digits
-        DecimalValue value2(std::string(
-                "-9999999999999999999999999999999999999999"
-                "99999999999999999999999999999999999999999")); // 81 digits
+        DecimalValue value1(
+                std::string("9999999999999999999999999999999999999999"
+                            "99999999999999999999999999999999999999999")); // 81 digits
+        DecimalValue value2(
+                std::string("-9999999999999999999999999999999999999999"
+                            "99999999999999999999999999999999999999999")); // 81 digits
         DecimalValue sub_result = value2 - value1;
         LOG(INFO) << "sub_result: " << sub_result.get_debug_info() << std::endl;
         DecimalValue expected_value = value2;
@@ -247,19 +239,25 @@ TEST_F(DecimalValueTest, sub) {
 }
 
 TEST_F(DecimalValueTest, mul) {
-    DecimalValue value11(std::string("3333333333.2222222222"));// 10 digits
+    DecimalValue value11(std::string("3333333333.2222222222"));  // 10 digits
     DecimalValue value12(std::string("-2222222222.1111111111")); // 10 digits
     DecimalValue mul_result1 = value11 * value12;
     std::cout << "mul_result1: " << mul_result1.get_debug_info() << std::endl;
-    ASSERT_EQ(DecimalValue(
-            std::string("-7407407406790123456.71604938271975308642")),
-            mul_result1);
+    ASSERT_EQ(DecimalValue(std::string("-7407407406790123456.71604938271975308642")), mul_result1);
 
     DecimalValue value21(std::string("0")); // zero
     DecimalValue mul_result2 = value11 * value21;
     std::cout << "mul_result2: " << mul_result2.get_debug_info() << std::endl;
     ASSERT_EQ(DecimalValue(std::string("0")), mul_result2);
 
+    {
+        // test when carry is needed
+        DecimalValue value1(std::string("3074062.5421333313"));
+        DecimalValue value2(std::string("2169.957745029689045693"));
+        DecimalValue mul_result = value1 * value2;
+        std::cout << "mul_result=" << mul_result.get_debug_info() << std::endl;
+        ASSERT_EQ(DecimalValue(std::string("6670585822.0078770603624547106640070909")), mul_result);
+    }
 }
 
 TEST_F(DecimalValueTest, div) {
@@ -286,7 +284,6 @@ TEST_F(DecimalValueTest, unary_minus_operator) {
         std::cout << "value2: " << value2.get_debug_info() << std::endl;
         ASSERT_EQ("111111111.222222222", value1.to_string(10));
         ASSERT_EQ("-111111111.222222222", value2.to_string(10));
-
     }
 }
 
@@ -529,7 +526,7 @@ TEST_F(DecimalValueTest, round_to_int) {
 
 TEST_F(DecimalValueTest, double_to_decimal) {
     double i = 1.2;
-    DecimalValue *value = new DecimalValue(100, 9876);
+    DecimalValue* value = new DecimalValue(100, 9876);
     value->assign_from_double(i);
     ASSERT_STREQ("1.2", value->to_string().c_str());
     delete value;
@@ -537,20 +534,20 @@ TEST_F(DecimalValueTest, double_to_decimal) {
 
 TEST_F(DecimalValueTest, float_to_decimal) {
     float i = 1.2;
-    DecimalValue *value = new DecimalValue(100, 9876);
+    DecimalValue* value = new DecimalValue(100, 9876);
     value->assign_from_float(i);
     ASSERT_STREQ("1.2", value->to_string().c_str());
     delete value;
 }
-} // end namespace palo
+} // end namespace doris
 
 int main(int argc, char** argv) {
-    // std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    // if (!palo::config::init(conffile.c_str(), false)) {
+    // std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    // if (!doris::config::init(conffile.c_str(), false)) {
     //     fprintf(stderr, "error read config file. \n");
     //     return -1;
     // }
-    palo::init_glog("be-test");
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

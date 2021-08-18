@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,19 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef  BDG_PALO_BE_SRC_QUERY_EXEC_OLAP_UTILS_H
-#define  BDG_PALO_BE_SRC_QUERY_EXEC_OLAP_UTILS_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_OLAP_UTILS_H
+#define DORIS_BE_SRC_QUERY_EXEC_OLAP_UTILS_H
+
+#include <math.h>
 
 #include "common/logging.h"
 #include "gen_cpp/Opcodes_types.h"
-#include "runtime/primitive_type.h"
+#include "olap/tuple.h"
 #include "runtime/datetime_value.h"
+#include "runtime/primitive_type.h"
 
-namespace palo {
+namespace doris {
 
 typedef bool (*CompareLargeFunc)(const void*, const void*);
 
-template<class T>
+template <class T>
 inline bool compare_large(const void* lhs, const void* rhs) {
     return *reinterpret_cast<const T*>(lhs) > *reinterpret_cast<const T*>(rhs);
 }
@@ -64,15 +65,15 @@ inline CompareLargeFunc get_compare_func(PrimitiveType type) {
     case TYPE_DATETIME:
         return compare_large<DateTimeValue>;
 
-    case TYPE_DECIMAL:
-        return compare_large<DecimalValue>;
+    case TYPE_DECIMALV2:
+        return compare_large<DecimalV2Value>;
 
     case TYPE_CHAR:
     case TYPE_VARCHAR:
         return compare_large<StringValue>;
 
     default:
-        DCHECK(false) << "Unsupport Compare type";
+        DCHECK(false) << "Unsupported Compare type";
     }
 }
 
@@ -82,50 +83,39 @@ static const char* POSITIVE_INFINITY = "+oo";
 typedef struct OlapScanRange {
 public:
     OlapScanRange() : begin_include(true), end_include(true) {
-        begin_scan_range.push_back(NEGATIVE_INFINITY);
-        end_scan_range.push_back(POSITIVE_INFINITY);
+        begin_scan_range.add_value(NEGATIVE_INFINITY);
+        end_scan_range.add_value(POSITIVE_INFINITY);
     }
-    OlapScanRange(
-        bool begin,
-        bool end,
-        std::vector<std::string>& begin_range,
-        std::vector<std::string>& end_range)
-        : begin_include(begin), end_include(end),
-          begin_scan_range(begin_range), end_scan_range(end_range) { }
+    OlapScanRange(bool begin, bool end, std::vector<std::string>& begin_range,
+                  std::vector<std::string>& end_range)
+            : begin_include(begin),
+              end_include(end),
+              begin_scan_range(begin_range),
+              end_scan_range(end_range) {}
 
     bool begin_include;
     bool end_include;
-    std::vector<std::string> begin_scan_range;
-    std::vector<std::string> end_scan_range;
+    OlapTuple begin_scan_range;
+    OlapTuple end_scan_range;
 } OlapScanRange;
 
-static char encoding_table[] = {
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-    'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
-    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-    'w', 'x', 'y', 'z', '0', '1', '2', '3',
-    '4', '5', '6', '7', '8', '9', '+', '/'
-};
+static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+                                'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+                                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                                'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+                                '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'};
 
 static int mod_table[] = {0, 2, 1};
 static const char base64_pad = '=';
 
-inline size_t base64_encode(
-    const char* data,
-    size_t length,
-    char* encoded_data) {
-
-    size_t output_length = (size_t)(4.0 * ceil((double) length / 3.0));
+inline size_t base64_encode(const char* data, size_t length, char* encoded_data) {
+    size_t output_length = (size_t)(4.0 * ceil((double)length / 3.0));
 
     if (encoded_data == NULL) {
         return 0;
     }
 
     for (uint32_t i = 0, j = 0; i < length;) {
-
         uint32_t octet_a = i < length ? (unsigned char)data[i++] : 0;
         uint32_t octet_b = i < length ? (unsigned char)data[i++] : 0;
         uint32_t octet_c = i < length ? (unsigned char)data[i++] : 0;
@@ -181,7 +171,7 @@ inline int get_olap_size(PrimitiveType type) {
         return 8;
     }
 
-    case TYPE_DECIMAL: {
+    case TYPE_DECIMALV2: {
         return 12;
     }
 
@@ -196,9 +186,9 @@ inline int get_olap_size(PrimitiveType type) {
 inline SQLFilterOp to_olap_filter_type(TExprOpcode::type type, bool opposite) {
     switch (type) {
     case TExprOpcode::LT:
+        return opposite ? FILTER_LARGER : FILTER_LESS;
+
     case TExprOpcode::LE:
-    // NOTE: Datetime may be truncated to a date column, so we convert LT to LE
-    //  for example: '2010-01-01 00:00:01' will be truncate to '2010-01-01'
         return opposite ? FILTER_LARGER_OR_EQUAL : FILTER_LESS_OR_EQUAL;
 
     case TExprOpcode::GT:
@@ -213,15 +203,17 @@ inline SQLFilterOp to_olap_filter_type(TExprOpcode::type type, bool opposite) {
     case TExprOpcode::NE:
         return opposite ? FILTER_IN : FILTER_NOT_IN;
 
+    case TExprOpcode::EQ_FOR_NULL:
+        return FILTER_IN;
+
     default:
-        VLOG(1) << "TExprOpcode: " << type;
+        VLOG_CRITICAL << "TExprOpcode: " << type;
         DCHECK(false);
     }
 
     return FILTER_IN;
 }
 
-} // namespace palo
+} // namespace doris
 
 #endif
-

@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,21 +15,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_HTTP_ACTION_PPROF_ACTIONS_H
-#define BDG_PALO_BE_SRC_HTTP_ACTION_PPROF_ACTIONS_H
+#ifndef DORIS_BE_SRC_HTTP_ACTION_PPROF_ACTIONS_H
+#define DORIS_BE_SRC_HTTP_ACTION_PPROF_ACTIONS_H
 
 #include "common/status.h"
 
-namespace palo {
+namespace doris {
 
-class Webserver;
+class EvHttpServer;
 class ExecEnv;
+class ObjectPool;
 
 class PprofActions {
 public:
-    static Status setup(ExecEnv* exec_env, Webserver* http_server);
+    static Status setup(ExecEnv* exec_env, EvHttpServer* http_server, ObjectPool& pool);
 };
 
-}
+} // namespace doris
 
 #endif

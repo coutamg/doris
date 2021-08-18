@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,64 +15,32 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_OLAP_MERGER_H
-#define BDG_PALO_BE_SRC_OLAP_MERGER_H
+#ifndef DORIS_BE_SRC_OLAP_MERGER_H
+#define DORIS_BE_SRC_OLAP_MERGER_H
 
 #include "olap/olap_define.h"
-#include "olap/olap_table.h"
+#include "olap/rowset/rowset_writer.h"
+#include "olap/tablet.h"
 
-namespace palo {
-
-class OLAPIndex;
-class IData;
+namespace doris {
 
 class Merger {
 public:
-    // parameter index is created by caller, and it is empty.
-    Merger(SmartOLAPTable table, OLAPIndex* index, ReaderType type);
+    struct Statistics {
+        // number of rows written to the destination rowset after merge
+        int64_t output_rows = 0;
+        int64_t merged_rows = 0;
+        int64_t filtered_rows = 0;
+    };
 
-    virtual ~Merger() {};
-
-    // @brief read from multiple OLAPData and OLAPIndex, then write into single OLAPData and
-    // OLAPIndex. When use_simple_merge is true, check weather to create hard link.
-    // @return  OLAPStatus: OLAP_SUCCESS or FAIL
-    // @note it will take long time to finish.
-    OLAPStatus merge(
-            const std::vector<IData*>& olap_data_arr,
-            bool use_simple_merge,
-            uint64_t* merged_rows,
-            uint64_t* filted_rows);
-
-    // 获取在做merge过程中累积的行数
-    uint64_t row_count() {
-        return _row_count;
-    }
-    // 获取前缀组合的selectivity
-    const std::vector<uint32_t>& selectivities() {
-        return _selectivities;
-    }
-
-private:
-    OLAPStatus _merge(
-            const std::vector<IData*>& olap_data_arr,
-            uint64_t* merged_rows,
-            uint64_t* filted_rows);
-
-    bool _check_simple_merge(const std::vector<IData*>& olap_data_arr);
-
-    OLAPStatus _create_hard_link();
-
-    SmartOLAPTable _table;
-    OLAPIndex* _index;
-    ReaderType _reader_type;
-    uint64_t _row_count;
-    std::vector<uint64_t> _uniq_keys;      // 存储每一种前缀组合的独特值个数
-    std::vector<uint32_t> _selectivities;  // 保存每一种前缀组合的selectivity
-    Version _simple_merge_version;
-
-    DISALLOW_COPY_AND_ASSIGN(Merger);
+    // merge rows from `src_rowset_readers` and write into `dst_rowset_writer`.
+    // return OLAP_SUCCESS and set statistics into `*stats_output`.
+    // return others on error
+    static OLAPStatus merge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
+                                    const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
+                                    RowsetWriter* dst_rowset_writer, Statistics* stats_output);
 };
 
-}  // namespace palo
+} // namespace doris
 
-#endif // BDG_PALO_BE_SRC_OLAP_MERGER_H
+#endif // DORIS_BE_SRC_OLAP_MERGER_H

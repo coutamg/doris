@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,17 +17,15 @@
 
 #include "util/hash_util.hpp"
 
-namespace palo {
+namespace doris {
 // Define the hashing functions for llvm.  They are not used by anything that is
 // cross compiled and without this, would get stripped by the clang optimizer.
 #ifdef IR_COMPILE
-extern "C"
-uint32_t ir_fnv_hash(const void* data, int32_t bytes, uint32_t hash) {
+extern "C" uint32_t ir_fnv_hash(const void* data, int32_t bytes, uint32_t hash) {
     return HashUtil::fnv_hash(data, bytes, hash);
 }
 
-extern "C"
-uint32_t ir_crc_hash(const void* data, int32_t bytes, uint32_t hash) {
+extern "C" uint32_t ir_crc_hash(const void* data, int32_t bytes, uint32_t hash) {
 #ifdef __SSE4_2__
     return HashUtil::crc_hash(data, bytes, hash);
 #else
@@ -41,4 +36,4 @@ uint32_t ir_crc_hash(const void* data, int32_t bytes, uint32_t hash) {
 #error "This file should only be compiled by clang."
 #endif
 
-}
+} // namespace doris

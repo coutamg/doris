@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -21,7 +19,7 @@
 
 #include "exec/exec_node.h"
 
-namespace palo {
+namespace doris {
 
 /// Node that returns an empty result set, i.e., just sets eos_ in GetNext().
 /// Corresponds to EmptySetNode.java in the FE.
@@ -31,5 +29,4 @@ public:
     virtual Status get_next(RuntimeState* state, RowBatch* row_batch, bool* eos) override;
 };
 
-}
-
+} // namespace doris

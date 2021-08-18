@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,24 +15,23 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXPRS_SLOT_REF_H
-#define BDG_PALO_BE_SRC_QUERY_EXPRS_SLOT_REF_H
+#ifndef DORIS_BE_SRC_QUERY_EXPRS_SLOT_REF_H
+#define DORIS_BE_SRC_QUERY_EXPRS_SLOT_REF_H
 
+#include "common/object_pool.h"
 #include "exprs/expr.h"
 
-namespace palo {
+namespace doris {
 
 // Reference to a single slot of a tuple.
 // We inline this here in order for Expr::get_value() to be able
 // to reference SlotRef::compute_fn() directly.
 // Splitting it up into separate .h files would require circular #includes.
-class SlotRef : public Expr {
+class SlotRef final : public Expr {
 public:
     SlotRef(const TExprNode& node);
     SlotRef(const SlotDescriptor* desc);
-    virtual Expr* clone(ObjectPool* pool) const override { 
-        return pool->add(new SlotRef(*this));
-    }
+    virtual Expr* clone(ObjectPool* pool) const override { return pool->add(new SlotRef(*this)); }
 
     // TODO: this is a hack to allow aggregation nodes to work around NULL slot
     // descriptors. Ideally the FE would dictate the type of the intermediate SlotRefs.
@@ -44,8 +40,9 @@ public:
     // Used for testing.  get_value will return tuple + offset interpreted as 'type'
     SlotRef(const TypeDescriptor& type, int offset);
 
-    virtual Status prepare(
-        RuntimeState* state, const RowDescriptor& row_desc, ExprContext* ctx);
+    Status prepare(const SlotDescriptor* slot_desc, const RowDescriptor& row_desc);
+
+    virtual Status prepare(RuntimeState* state, const RowDescriptor& row_desc, ExprContext* ctx);
     static void* get_value(Expr* expr, TupleRow* row);
     void* get_slot(TupleRow* row);
     Tuple* get_tuple(TupleRow* row);
@@ -53,42 +50,33 @@ public:
     static bool vector_compute_fn(Expr* expr, VectorizedRowBatch* batch);
     static bool is_nullable(Expr* expr);
     virtual std::string debug_string() const;
-    virtual bool is_constant() const {
-        return false;
-    }
-    virtual bool is_vectorized() const {
-        return true;
-    }
+    virtual bool is_constant() const { return false; }
+    virtual bool is_vectorized() const { return true; }
     virtual bool is_bound(std::vector<TupleId>* tuple_ids) const;
     virtual int get_slot_ids(std::vector<SlotId>* slot_ids) const;
-    SlotId slot_id() const {
-        return _slot_id;
-    }
-    inline NullIndicatorOffset null_indicator_offset() const {
-        return _null_indicator_offset;
-    }
-    virtual Status get_codegend_compute_fn(RuntimeState* state, llvm::Function** fn) override;
+    SlotId slot_id() const { return _slot_id; }
+    inline NullIndicatorOffset null_indicator_offset() const { return _null_indicator_offset; }
 
-    virtual palo_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::TinyIntVal get_tiny_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::SmallIntVal get_small_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::IntVal get_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::BigIntVal get_big_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::LargeIntVal get_large_int_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::FloatVal get_float_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::DoubleVal get_double_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::StringVal get_string_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::DateTimeVal get_datetime_val(ExprContext* context, TupleRow*);
-    virtual palo_udf::DecimalVal get_decimal_val(ExprContext* context, TupleRow*);
-    // virtual palo_udf::ArrayVal GetArrayVal(ExprContext* context, TupleRow*);
+    virtual doris_udf::BooleanVal get_boolean_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::TinyIntVal get_tiny_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::SmallIntVal get_small_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::IntVal get_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::BigIntVal get_big_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::LargeIntVal get_large_int_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::FloatVal get_float_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::DoubleVal get_double_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::StringVal get_string_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::DateTimeVal get_datetime_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::DecimalV2Val get_decimalv2_val(ExprContext* context, TupleRow*);
+    virtual doris_udf::CollectionVal get_array_val(ExprContext* context, TupleRow*);
 
 private:
-    int _tuple_idx;  // within row
-    int _slot_offset;  // within tuple
-    NullIndicatorOffset _null_indicator_offset;  // within tuple
+    int _tuple_idx;                             // within row
+    int _slot_offset;                           // within tuple
+    NullIndicatorOffset _null_indicator_offset; // within tuple
     const SlotId _slot_id;
     bool _tuple_is_nullable; // true if the tuple is nullable.
-    TupleId _tuple_id; // used for desc this slot from
+    TupleId _tuple_id;       // used for desc this slot from
     bool _is_nullable;
 };
 
@@ -127,6 +115,6 @@ inline bool SlotRef::is_nullable(Expr* expr) {
     return ref->_is_nullable;
 }
 
-}
+} // namespace doris
 
 #endif

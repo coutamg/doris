@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,26 +17,24 @@
 
 #include "runtime/large_int_value.h"
 
-#include <boost/lexical_cast.hpp>
-#include <iostream>
-#include <string>
-#include <sstream>
 #include <gtest/gtest.h>
 
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "common/configbase.h"
 #include "common/logging.h"
 
-namespace palo {
+namespace doris {
 
 class LargeIntValueTest : public testing::Test {
 public:
-    LargeIntValueTest() {
-    }
+    LargeIntValueTest() {}
 
 protected:
-    virtual void SetUp() {
-    }
-    virtual void TearDown() {
-    }
+    virtual void SetUp() {}
+    virtual void TearDown() {}
 };
 
 TEST_F(LargeIntValueTest, string_to_largeint) {
@@ -94,11 +89,11 @@ TEST_F(LargeIntValueTest, largeint_to_string) {
     }
 }
 
-} // end namespace palo
+} // end namespace doris
 
 int main(int argc, char** argv) {
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (!doris::config::init(conffile.c_str(), false)) {
         fprintf(stderr, "error read config file. \n");
         return -1;
     }

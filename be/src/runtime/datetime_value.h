@@ -1,5 +1,3 @@
-// Copyright (c) 2017, Baidu.com, Inc. All Rights Reserved
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -17,18 +15,23 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_RUNTIME_DATETIME_VALUE_H
-#define BDG_PALO_BE_RUNTIME_DATETIME_VALUE_H
+#ifndef DORIS_BE_RUNTIME_DATETIME_VALUE_H
+#define DORIS_BE_RUNTIME_DATETIME_VALUE_H
 
+#include <re2/re2.h>
 #include <stdint.h>
 
-#include <iostream>
+#include <chrono>
 #include <cstddef>
+#include <iostream>
 
+#include "cctz/civil_time.h"
+#include "cctz/time_zone.h"
 #include "udf/udf.h"
 #include "util/hash_util.hpp"
+#include "util/timezone_utils.h"
 
-namespace palo {
+namespace doris {
 
 enum TimeUnit {
     MICROSECOND,
@@ -54,23 +57,34 @@ enum TimeUnit {
 };
 
 struct TimeInterval {
-    int32_t year;
-    int32_t month;
-    int32_t day;
-    int32_t hour;
-    int32_t minute;
-    int32_t second;
-    int32_t microsecond;
+    int64_t year;
+    int64_t month;
+    int64_t day;
+    int64_t hour;
+    int64_t minute;
+    int64_t second;
+    int64_t microsecond;
     bool is_neg;
 
-    TimeInterval() :
-            year(0), month(0), day(0), 
-            hour(0), minute(0), second(0), microsecond(0), is_neg(false) {
-    }
+    TimeInterval()
+            : year(0),
+              month(0),
+              day(0),
+              hour(0),
+              minute(0),
+              second(0),
+              microsecond(0),
+              is_neg(false) {}
 
-    TimeInterval(TimeUnit unit, int count, bool is_neg_param) :
-            year(0), month(0), day(0), 
-            hour(0), minute(0), second(0), microsecond(0), is_neg(is_neg_param) {
+    TimeInterval(TimeUnit unit, int64_t count, bool is_neg_param)
+            : year(0),
+              month(0),
+              day(0),
+              hour(0),
+              minute(0),
+              second(0),
+              microsecond(0),
+              is_neg(is_neg_param) {
         switch (unit) {
         case YEAR:
             year = count;
@@ -102,11 +116,7 @@ struct TimeInterval {
     }
 };
 
-enum TimeType {
-    TIME_TIME = 1,
-    TIME_DATE = 2,
-    TIME_DATETIME = 3
-};
+enum TimeType { TIME_TIME = 1, TIME_DATE = 2, TIME_DATETIME = 3 };
 
 // Used to compute week
 const int WEEK_MONDAY_FIRST = 1;
@@ -132,14 +142,21 @@ uint8_t mysql_week_mode(uint32_t mode);
 class DateTimeValue {
 public:
     // Constructor
-    DateTimeValue() :
-            _neg(0), _type(TIME_DATETIME), _hour(0), _minute(0), _second(0), 
-            _year(0), _month(0), _day(0), _microsecond(0) {
-    }
+    DateTimeValue()
+            : _neg(0),
+              _type(TIME_DATETIME),
+              _hour(0),
+              _minute(0),
+              _second(0),
+              _year(0),
+              _month(0),
+              _day(0),
+              _microsecond(0) {}
 
-    DateTimeValue(int64_t t) {
-        from_date_int64(t);
-    }
+    DateTimeValue(int64_t t) { from_date_int64(t); }
+
+    void set_time(uint32_t year, uint32_t month, uint32_t day, uint32_t hour,
+        uint32_t minute, uint32_t second, uint32_t microsecond);
 
     // Converted from Olap Date or Datetime
     bool from_olap_datetime(uint64_t datetime) {
@@ -148,20 +165,18 @@ public:
         uint64_t date = datetime / 1000000;
         uint64_t time = datetime % 1000000;
 
-        _year = date / 10000;
+        auto [year, month, day, hour, minute, second, microsecond] = std::tuple{0,0,0,0,0,0,0};
+        year = date / 10000;
         date %= 10000;
-        _month = date / 100;
-        _day = date % 100;
-        _hour = time / 10000;
+        month = date / 100;
+        day = date % 100;
+        hour = time / 10000;
         time %= 10000;
-        _minute = time / 100;
-        _second = time % 100;
-        _microsecond = 0;
+        minute = time / 100;
+        second = time % 100;
+        microsecond = 0;
 
-        if (check_range() || check_date()) {
-            return false;
-        }
-        return true;
+        return check_range_and_set_time(year, month, day, hour, minute, second, microsecond, _type);
     }
 
     uint64_t to_olap_datetime() const {
@@ -170,25 +185,19 @@ public:
         return date_val * 1000000 + time_val;
     }
 
-    bool from_olap_date(uint64_t date) { 
+    bool from_olap_date(uint64_t date) {
         _neg = 0;
         _type = TIME_DATE;
-        _hour = 0;
-        _minute = 0;
-        _second = 0;
-        _microsecond = 0;
 
-        _day = date & 0x1f;
+        auto [year, month, day, hour, minute, second, microsecond] = std::tuple{0,0,0,0,0,0,0};
+
+        day = date & 0x1f;
         date >>= 5;
-
-        _month = date & 0x0f;
+        month = date & 0x0f;
         date >>= 4;
+        year = date;
 
-        _year = date;
-        if (check_range() || check_date()) {
-            return false;
-        }
-        return true;
+        return check_range_and_set_time(year, month, day, hour, minute, second, microsecond, _type);
     }
 
     uint64_t to_olap_date() const {
@@ -201,15 +210,13 @@ public:
         return val;
     }
 
-    bool from_date_format_str(const char* format, int format_len,
-                              const char* value, int value_len) {
+    bool from_date_format_str(const char* format, int format_len, const char* value,
+                              int value_len) {
         memset(this, 0, sizeof(*this));
         return from_date_format_str(format, format_len, value, value_len, nullptr);
     }
 
-    operator int64_t() const {
-        return to_int64();
-    }
+    operator int64_t() const { return to_int64(); }
 
     // Given days since 0000-01-01, construct the datetime value.
     bool from_date_daynr(uint64_t);
@@ -238,15 +245,30 @@ public:
 
     // Convert this datetime value to string by the format string
     bool to_format_string(const char* format, int len, char* to) const;
-    int compute_format_len(const char* format, int len) const;
+
+    // compute the length of data format pattern
+    static int compute_format_len(const char* format, int len);
+
+    // Return true if range or date is invalid
+    static bool check_range(uint32_t year, uint32_t month, uint32_t day, uint32_t hour,
+        uint32_t minute, uint32_t second, uint32_t microsecond, uint16_t type);
+
+    static bool check_date(uint32_t year, uint32_t month, uint32_t day);
 
     // Convert this value to uint64_t
     // Will check its type
     int64_t to_int64() const;
 
-    inline uint64_t daynr() const {
-        return calc_daynr(_year, _month, _day);
-    }
+    bool check_range_and_set_time(uint32_t year, uint32_t month, uint32_t day, uint32_t hour,
+        uint32_t minute, uint32_t second, uint32_t microsecond, uint16_t type) {
+        if (check_range(year, month, day, hour, minute, second, microsecond, type)) {
+            return false;
+        }
+        set_time(year, month, day, hour, minute, second, microsecond);
+        return true;
+    };
+
+    inline uint64_t daynr() const { return calc_daynr(_year, _month, _day); }
 
     // Calculate how many days since 0000-01-01
     // 0000-01-01 is 1st B.C.
@@ -254,23 +276,18 @@ public:
 
     static uint8_t calc_weekday(uint64_t daynr, bool);
 
-    int year() const {
-        return _year;
-    }
-    int month() const {
-        return _month;
-    }
-    int day() const {
-        return _day;
-    }
-    int hour() const {
-        return _hour;
-    }
-    int minute() const {
-        return _minute;
-    }
-    int second() const {
-        return _second;
+    int year() const { return _year; }
+    int month() const { return _month; }
+    int day() const { return _day; }
+    int hour() const { return _hour; }
+    int minute() const { return _minute; }
+    int second() const { return _second; }
+    int microsecond() const { return _microsecond; }
+
+    bool check_loss_accuracy_cast_to_date() {
+        auto loss_accuracy = _hour != 0 || _minute != 0 || _second != 0 || _microsecond != 0;
+        cast_to_date();
+        return loss_accuracy;
     }
 
     void cast_to_date() {
@@ -288,55 +305,59 @@ public:
         _type = TIME_TIME;
     }
 
-    void to_datetime() {
-        _type = TIME_DATETIME;
-    }
+    void to_datetime() { _type = TIME_DATETIME; }
 
     // Weekday, from 0(Mon) to 6(Sun)
-    inline uint8_t weekday() const {
-        return calc_weekday(daynr(), false);
-    }
+    inline uint8_t weekday() const { return calc_weekday(daynr(), false); }
 
     // The bits in week_format has the following meaning:
-    // WEEK_MONDAY_FIRST (0)  
-    //  If not set: 
+    // WEEK_MONDAY_FIRST (0)
+    //  If not set:
     //      Sunday is first day of week
-    //  If set:     
+    //  If set:
     //      Monday is first day of week
     //
     // WEEK_YEAR (1)
-    //  If not set: 
+    //  If not set:
     //      Week is in range 0-53
     //      Week 0 is returned for the the last week of the previous year (for
     //      a date at start of january) In this case one can get 53 for the
     //      first week of next year.  This flag ensures that the week is
     //      relevant for the given year. Note that this flag is only
     //      relevant if WEEK_JANUARY is not set.
-    //  If set: 
+    //  If set:
     //      Week is in range 1-53.
     //      In this case one may get week 53 for a date in January (when
     //      the week is that last week of previous year) and week 1 for a
     //      date in December.
-    //      
-    // WEEK_FIRST_WEEKDAY (2)  
+    //
+    // WEEK_FIRST_WEEKDAY (2)
     //  If not set
     //      Weeks are numbered according to ISO 8601:1988
     //  If set
     //      The week that contains the first 'first-day-of-week' is week 1.
     //
-    // ISO 8601:1988 means that 
+    // ISO 8601:1988 means that
     //      if the week containing January 1 has
     //      four or more days in the new year, then it is week 1;
     //      Otherwise it is the last week of the previous year, and the
     //      next week is week 1.
     uint8_t week(uint8_t) const;
 
-    // Add interval 
+    uint32_t year_week(uint8_t mode) const;
+
+    // Add interval
     bool date_add_interval(const TimeInterval& interval, TimeUnit unit);
 
-    int unix_timestamp() const;
+    //unix_timestamp is called with a timezone argument,
+    //it returns seconds of the value of date literal since '1970-01-01 00:00:00' UTC
+    bool unix_timestamp(int64_t* timestamp, const std::string& timezone) const;
+    bool unix_timestamp(int64_t* timestamp, const cctz::time_zone& ctz) const;
 
-    bool from_unixtime(int);
+    //construct datetime_value from timestamp and timezone
+    //timestamp is an internal timestamp value representing seconds since '1970-01-01 00:00:00' UTC
+    bool from_unixtime(int64_t, const std::string& timezone);
+    bool from_unixtime(int64_t, const cctz::time_zone& ctz);
 
     bool operator==(const DateTimeValue& other) const {
         // NOTE: This is not same with MySQL.
@@ -347,18 +368,12 @@ public:
         return v1 == v2;
     }
 
-    bool operator!=(const DateTimeValue& other) const {
-        return !(*this == other);
-    }
+    bool operator!=(const DateTimeValue& other) const { return !(*this == other); }
 
-    // Now, we don't support TIME_TIME type, 
-    bool operator<=(const DateTimeValue& other) const {
-        return !(*this > other);
-    }
+    // Now, we don't support TIME_TIME type,
+    bool operator<=(const DateTimeValue& other) const { return !(*this > other); }
 
-    bool operator>=(const DateTimeValue& other) const {
-        return !(*this < other);
-    }
+    bool operator>=(const DateTimeValue& other) const { return !(*this < other); }
 
     bool operator<(const DateTimeValue& other) const {
         int64_t v1 = to_int64_datetime_packed();
@@ -397,12 +412,12 @@ public:
         return *this;
     }
 
-    void to_datetime_val(palo_udf::DateTimeVal* tv) const {
+    void to_datetime_val(doris_udf::DateTimeVal* tv) const {
         tv->packed_time = to_int64_datetime_packed();
         tv->type = _type;
     }
 
-    static DateTimeValue from_datetime_val(const palo_udf::DateTimeVal& tv) {
+    static DateTimeValue from_datetime_val(const doris_udf::DateTimeVal& tv) {
         DateTimeValue value;
         value.from_packed_time(tv.packed_time);
         if (tv.type == TIME_DATE) {
@@ -411,13 +426,9 @@ public:
         return value;
     }
 
-    inline uint32_t hash(int seed) const {
-        return HashUtil::hash(this, sizeof(*this), seed);
-    }
+    inline uint32_t hash(int seed) const { return HashUtil::hash(this, sizeof(*this), seed); }
 
-    int day_of_year() const {
-        return daynr() - calc_daynr(_year, 1, 1) + 1;
-    }
+    int day_of_year() const { return daynr() - calc_daynr(_year, 1, 1) + 1; }
 
     // TODO(zhaochun): local time ???
     static DateTimeValue local_time();
@@ -429,20 +440,34 @@ public:
     }
 
     static DateTimeValue datetime_min_value() {
+        static DateTimeValue _s_min_datetime_value(0, TIME_DATETIME, 0, 0, 0, 0, 0, 1, 1);
         return _s_min_datetime_value;
     }
 
     static DateTimeValue datetime_max_value() {
+        static DateTimeValue _s_max_datetime_value(0, TIME_DATETIME, 23, 59, 59, 0, 9999, 12, 31);
         return _s_max_datetime_value;
     }
 
     int64_t second_diff(const DateTimeValue& rhs) const {
-        return unix_timestamp() - rhs.unix_timestamp();
+        int day_diff = daynr() - rhs.daynr();
+        int time_diff = (hour() * 3600 + minute() * 60 + second()) -
+                        (rhs.hour() * 3600 + rhs.minute() * 60 + rhs.second());
+        return day_diff * 3600 * 24 + time_diff;
+    }
+
+    int64_t time_part_diff(const DateTimeValue& rhs) const {
+        int time_diff = (hour() * 3600 + minute() * 60 + second()) -
+                        (rhs.hour() * 3600 + rhs.minute() * 60 + rhs.second());
+        return time_diff;
     }
 
     void set_type(int type);
 
-    static const char* _s_llvm_class_name;
+    int type() const { return _type; }
+
+    bool is_valid_date() const { return !check_range(_year, _month, _day,
+            _hour, _minute, _second, _microsecond, _type) && _month > 0 && _day > 0; }
 
 private:
     // Used to make sure sizeof DateTimeValue
@@ -470,7 +495,7 @@ private:
         return (time << 24) + second_part;
     }
 
-    // To compatitable with MySQL
+    // To compatible with MySQL
     int64_t to_int64_datetime_packed() const {
         int64_t ymd = ((_year * 13 + _month) << 5) | _day;
         int64_t hms = (_hour << 12) | (_minute << 6) | _second;
@@ -484,17 +509,13 @@ private:
         return _neg ? -tmp : tmp;
     }
 
-    // Check wether value of field is valid.
-    bool check_range() const;
-    bool check_date() const;
-
     // Used to construct from int value
-    int64_t standardlize_timevalue(int64_t value);
+    int64_t standardize_timevalue(int64_t value);
 
     // Used to convert to a string.
-    char* append_date_string(char *to) const;
-    char* append_time_string(char *to) const;
-    char* to_datetime_string(char *to) const;
+    char* append_date_string(char* to) const;
+    char* append_time_string(char* to) const;
+    char* to_datetime_string(char* to) const;
     char* to_date_string(char* to) const;
     char* to_time_string(char* to) const;
 
@@ -503,25 +524,22 @@ private:
     int64_t to_date_int64() const;
     int64_t to_time_int64() const;
 
-    static uint8_t calc_week(const DateTimeValue& value, uint8_t mode, uint32_t *year);
+    static uint8_t calc_week(const DateTimeValue& value, uint8_t mode, uint32_t* year);
 
     // This is private function which modify date but modify `_type`
     bool get_date_from_daynr(uint64_t);
-
 
     // Helper to set max, min, zero
     void set_zero(int type);
     void set_max_time(bool neg);
 
-    bool from_date_format_str(const char* format, int format_len,
-                              const char* value, int value_len, 
+    bool from_date_format_str(const char* format, int format_len, const char* value, int value_len,
                               const char** sub_val_end);
 
-
     // 1 bits for neg. 3 bits for type. 12bit for hour
-    uint16_t _neg:1;        // Used for time value.
-    uint16_t _type:3;       // Which type of this value.
-    uint16_t _hour:12;
+    uint16_t _neg : 1;  // Used for time value.
+    uint16_t _type : 3; // Which type of this value.
+    uint16_t _hour : 12;
     uint8_t _minute;
     uint8_t _second;
     uint16_t _year;
@@ -530,14 +548,20 @@ private:
     // TODO(zc): used for nothing
     uint64_t _microsecond;
 
-    DateTimeValue(uint8_t neg, uint8_t type, uint8_t hour, 
-                  uint8_t minute, uint8_t second, uint32_t microsecond, 
-                  uint16_t year, uint8_t month, uint8_t day) : 
-            _neg(neg), _type(type), _hour(hour), _minute(minute), _second(second),
-            _year(year), _month(month), _day(day), _microsecond(microsecond) { }
+    DateTimeValue(uint8_t neg, uint8_t type, uint8_t hour, uint8_t minute, uint8_t second,
+                  uint32_t microsecond, uint16_t year, uint8_t month, uint8_t day)
+            : _neg(neg),
+              _type(type),
+              _hour(hour),
+              _minute(minute),
+              _second(second),
+              _year(year),
+              _month(month),
+              _day(day),
+              _microsecond(microsecond) {}
 
-    static DateTimeValue _s_min_datetime_value;
-    static DateTimeValue _s_max_datetime_value;
+    // RE2 obj is thread safe
+    static RE2 time_zone_offset_format_reg;
 };
 
 // only support DATE - DATE (no support DATETIME - DATETIME)
@@ -547,15 +571,13 @@ std::ostream& operator<<(std::ostream& os, const DateTimeValue& value);
 
 std::size_t hash_value(DateTimeValue const& value);
 
-}
+} // namespace doris
 
 namespace std {
-    template<>
-    struct hash<palo::DateTimeValue> {
-        size_t operator()(const palo::DateTimeValue& v) const {
-            return palo::hash_value(v);
-        }
-    };
-}
+template <>
+struct hash<doris::DateTimeValue> {
+    size_t operator()(const doris::DateTimeValue& v) const { return doris::hash_value(v); }
+};
+} // namespace std
 
 #endif

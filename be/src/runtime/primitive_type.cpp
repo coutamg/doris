@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -19,9 +16,13 @@
 // under the License.
 
 #include "runtime/primitive_type.h"
+
 #include <sstream>
 
-namespace palo {
+#include "gen_cpp/Types_types.h"
+#include "runtime/collection_value.h"
+
+namespace doris {
 //to_tcolumn_type_thrift only test
 TColumnType to_tcolumn_type_thrift(TPrimitiveType::type ttype) {
     TColumnType t;
@@ -71,20 +72,29 @@ PrimitiveType thrift_to_type(TPrimitiveType::type ttype) {
     case TPrimitiveType::DATETIME:
         return TYPE_DATETIME;
 
+    case TPrimitiveType::TIME:
+        return TYPE_TIME;
+
     case TPrimitiveType::VARCHAR:
         return TYPE_VARCHAR;
 
     case TPrimitiveType::BINARY:
         return TYPE_BINARY;
 
-    case TPrimitiveType::DECIMAL:
-        return TYPE_DECIMAL;
+    case TPrimitiveType::DECIMALV2:
+        return TYPE_DECIMALV2;
 
     case TPrimitiveType::CHAR:
         return TYPE_CHAR;
-            
+
     case TPrimitiveType::HLL:
         return TYPE_HLL;
+
+    case TPrimitiveType::OBJECT:
+        return TYPE_OBJECT;
+
+    case TPrimitiveType::ARRAY:
+        return TYPE_ARRAY;
 
     default:
         return INVALID_TYPE;
@@ -129,21 +139,30 @@ TPrimitiveType::type to_thrift(PrimitiveType ptype) {
     case TYPE_DATETIME:
         return TPrimitiveType::DATETIME;
 
+    case TYPE_TIME:
+        return TPrimitiveType::TIME;
+
     case TYPE_VARCHAR:
         return TPrimitiveType::VARCHAR;
 
     case TYPE_BINARY:
         return TPrimitiveType::BINARY;
 
-    case TYPE_DECIMAL:
-        return TPrimitiveType::DECIMAL;
+    case TYPE_DECIMALV2:
+        return TPrimitiveType::DECIMALV2;
 
     case TYPE_CHAR:
         return TPrimitiveType::CHAR;
 
     case TYPE_HLL:
         return TPrimitiveType::HLL;
-            
+
+    case TYPE_OBJECT:
+        return TPrimitiveType::OBJECT;
+
+    case TYPE_ARRAY:
+        return TPrimitiveType::ARRAY;
+
     default:
         return TPrimitiveType::INVALID_TYPE;
     }
@@ -187,19 +206,30 @@ std::string type_to_string(PrimitiveType t) {
     case TYPE_DATETIME:
         return "DATETIME";
 
+    case TYPE_TIME:
+        return "TIME";
+
     case TYPE_VARCHAR:
         return "VARCHAR";
 
     case TYPE_BINARY:
         return "BINARY";
 
-    case TYPE_DECIMAL:
-        return "DECIMAL";
+    case TYPE_DECIMALV2:
+        return "DECIMALV2";
 
     case TYPE_CHAR:
         return "CHAR";
+
     case TYPE_HLL:
         return "HLL";
+
+    case TYPE_OBJECT:
+        return "OBJECT";
+
+    case TYPE_ARRAY:
+        return "ARRAY";
+
     default:
         return "";
     };
@@ -253,14 +283,17 @@ std::string type_to_odbc_string(PrimitiveType t) {
     case TYPE_BINARY:
         return "binary";
 
-    case TYPE_DECIMAL:
-        return "decimal";
+    case TYPE_DECIMALV2:
+        return "decimalv2";
 
     case TYPE_CHAR:
         return "char";
-            
+
     case TYPE_HLL:
         return "hll";
+
+    case TYPE_OBJECT:
+        return "object";
     };
 
     return "unknown";
@@ -268,15 +301,78 @@ std::string type_to_odbc_string(PrimitiveType t) {
 
 // for test only
 TTypeDesc gen_type_desc(const TPrimitiveType::type val) {
-    std::vector<TTypeNode>  types_list;
+    std::vector<TTypeNode> types_list;
     TTypeNode type_node;
     TTypeDesc type_desc;
     TScalarType scalar_type;
     scalar_type.__set_type(val);
-    type_node.__set_scalar_type(scalar_type);  
+    type_node.__set_scalar_type(scalar_type);
     types_list.push_back(type_node);
     type_desc.__set_types(types_list);
     return type_desc;
 }
 
+// for test only
+TTypeDesc gen_type_desc(const TPrimitiveType::type val, const std::string& name) {
+    std::vector<TTypeNode> types_list;
+    TTypeNode type_node;
+    TTypeDesc type_desc;
+    TScalarType scalar_type;
+    scalar_type.__set_type(val);
+    std::vector<TStructField> fields;
+    TStructField field;
+    field.__set_name(name);
+    fields.push_back(field);
+    type_node.__set_struct_fields(fields);
+    type_node.__set_scalar_type(scalar_type);
+    types_list.push_back(type_node);
+    type_desc.__set_types(types_list);
+    return type_desc;
 }
+
+int get_slot_size(PrimitiveType type) {
+    switch (type) {
+    case TYPE_OBJECT:
+    case TYPE_HLL:
+    case TYPE_CHAR:
+    case TYPE_VARCHAR:
+        return sizeof(StringValue);
+    case TYPE_ARRAY:
+        return sizeof(CollectionValue);
+
+    case TYPE_NULL:
+    case TYPE_BOOLEAN:
+    case TYPE_TINYINT:
+        return 1;
+
+    case TYPE_SMALLINT:
+        return 2;
+
+    case TYPE_INT:
+    case TYPE_FLOAT:
+        return 4;
+
+    case TYPE_BIGINT:
+    case TYPE_DOUBLE:
+        return 8;
+
+    case TYPE_LARGEINT:
+        return sizeof(__int128);
+
+    case TYPE_DATE:
+    case TYPE_DATETIME:
+        // This is the size of the slot, the actual size of the data is 12.
+        return 16;
+
+    case TYPE_DECIMALV2:
+        return 16;
+
+    case INVALID_TYPE:
+    default:
+        DCHECK(false);
+    }
+
+    return 0;
+}
+
+} // namespace doris

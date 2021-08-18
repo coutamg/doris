@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,26 +15,25 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "exec/csv_scan_node.h"
+#include <gtest/gtest.h>
 
 #include <vector>
 
-#include "gperftools/profiler.h"
-#include <gtest/gtest.h>
-
+#include "exec/csv_scan_node.h"
 #include "gen_cpp/PlanNodes_types.h"
 #include "gen_cpp/Types_types.h"
+#include "gperftools/profiler.h"
 #include "runtime/row_batch.h"
 #include "runtime/runtime_state.h"
-#include "util/logging.h"
 #include "util/debug_util.h"
+#include "util/logging.h"
 
-namespace palo {
+namespace doris {
 
 class CsvScanNodeBenchTest : public testing::Test {
 public:
-    CsvScanNodeBenchTest(){}
-    ~CsvScanNodeBenchTest(){}
+    CsvScanNodeBenchTest() {}
+    ~CsvScanNodeBenchTest() {}
 
 protected:
     virtual void SetUp() {
@@ -48,9 +44,7 @@ protected:
         system("cp -r ./be/test/query/exec/test_data/csv_scanner ./test_run/.");
         init();
     }
-    virtual void TearDown() {
-        system("rm -rf ./test_run");
-    }
+    virtual void TearDown() { system("rm -rf ./test_run"); }
 
     void init();
     void init_desc_tbl();
@@ -298,7 +292,6 @@ void CsvScanNodeBenchTest::init_desc_tbl() {
     _tnode.csv_scan_node.__isset.default_values = true;
     _tnode.csv_scan_node.max_filter_ratio = 0.5;
     _tnode.__isset.csv_scan_node = true;
-
 }
 
 TEST_F(CsvScanNodeBenchTest, NormalUse) {
@@ -320,7 +313,6 @@ TEST_F(CsvScanNodeBenchTest, NormalUse) {
         int num = row_batch.num_rows();
         // ASSERT_TRUE(num > 0);
         // std::cout << "num: " << num << std::endl;
-
     }
 
     ASSERT_TRUE(scan_node.close(_state).ok());
@@ -333,16 +325,16 @@ TEST_F(CsvScanNodeBenchTest, NormalUse) {
     }
 }
 
-} // end namespace palo
+} // end namespace doris
 
 int main(int argc, char** argv) {
     ProfilerStart("profile_scan_bench");
-    std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    // if (!palo::config::init(conffile.c_str(), false)) {
+    std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    // if (!doris::config::init(conffile.c_str(), false)) {
     //     fprintf(stderr, "error read config file. \n");
     //     return -1;
     // }
-    palo::init_glog("be-test");
+    doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
 
     RUN_ALL_TESTS();

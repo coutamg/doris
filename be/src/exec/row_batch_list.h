@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,17 +15,17 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_QUERY_EXEC_ROW_BATCH_LIST_H
-#define BDG_PALO_BE_SRC_QUERY_EXEC_ROW_BATCH_LIST_H
+#ifndef DORIS_BE_SRC_QUERY_EXEC_ROW_BATCH_LIST_H
+#define DORIS_BE_SRC_QUERY_EXEC_ROW_BATCH_LIST_H
 
-#include <vector>
 #include <string>
+#include <vector>
 
 #include "common/logging.h"
 #include "runtime/row_batch.h"
-#include "util/debug_util.h"
+#include "runtime/tuple_row.h"
 
-namespace palo {
+namespace doris {
 
 class TupleRow;
 class RowDescriptor;
@@ -38,20 +35,18 @@ class MemPool;
 // iterating over the TupleRows.
 class RowBatchList {
 public:
-    RowBatchList() : _total_num_rows(0) { }
-    virtual ~RowBatchList() { }
+    RowBatchList() : _total_num_rows(0) {}
+    virtual ~RowBatchList() {}
 
     // A simple iterator used to scan over all the rows stored in the list.
     class TupleRowIterator {
     public:
         // Dummy constructor
-        TupleRowIterator() : _list(NULL), _row_idx(0) { }
-        virtual ~TupleRowIterator() { }
+        TupleRowIterator() : _list(NULL), _row_idx(0) {}
+        virtual ~TupleRowIterator() {}
 
         // Returns true if this iterator is at the end, i.e. get_row() cannot be called.
-        bool at_end() {
-            return _batch_it == _list->_row_batches.end();
-        }
+        bool at_end() { return _batch_it == _list->_row_batches.end(); }
 
         // Returns the current row. Callers must check the iterator is not at_end() before
         // calling get_row().
@@ -76,10 +71,7 @@ public:
         friend class RowBatchList;
 
         TupleRowIterator(RowBatchList* list)
-            : _list(list),
-              _batch_it(list->_row_batches.begin()),
-              _row_idx(0) {
-        }
+                : _list(list), _batch_it(list->_row_batches.begin()), _row_idx(0) {}
 
         RowBatchList* _list;
         std::vector<RowBatch*>::iterator _batch_it;
@@ -111,7 +103,7 @@ public:
         RowBatchList::TupleRowIterator it = iterator();
 
         while (!it.at_end()) {
-            out << " " << print_row(it.get_row(), desc);
+            out << " " << it.get_row()->to_string(desc);
             it.next();
         }
 
@@ -120,14 +112,10 @@ public:
     }
 
     // Returns the total number of rows in all row batches.
-    int64_t total_num_rows() {
-        return _total_num_rows;
-    }
+    int64_t total_num_rows() { return _total_num_rows; }
 
     // Returns a new iterator over all the tuple rows.
-    TupleRowIterator iterator() {
-        return TupleRowIterator(this);
-    }
+    TupleRowIterator iterator() { return TupleRowIterator(this); }
 
 private:
     friend class TupleRowIterator;
@@ -138,7 +126,6 @@ private:
     int64_t _total_num_rows;
 };
 
-}
+} // namespace doris
 
 #endif
-

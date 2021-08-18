@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,14 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#ifndef BDG_PALO_BE_SRC_COMMON_UTIL_URL_CODING_H
-#define BDG_PALO_BE_SRC_COMMON_UTIL_URL_CODING_H
+#ifndef DORIS_BE_SRC_COMMON_UTIL_URL_CODING_H
+#define DORIS_BE_SRC_COMMON_UTIL_URL_CODING_H
 
+#include <boost/cstdint.hpp>
 #include <string>
 #include <vector>
-#include <boost/cstdint.hpp>
 
-namespace palo {
+namespace doris {
 
 // Utility method to URL-encode a string (that is, replace special
 // characters with %<hex value in ascii>).
@@ -42,10 +39,15 @@ void url_encode(const std::vector<uint8_t>& in, std::string* out);
 // certain characters like ' '.
 bool url_decode(const std::string& in, std::string* out);
 
+void base64url_encode(const std::string& in, std::string* out);
+void base64_encode(const std::string& in, std::string* out);
+size_t base64_encode(const unsigned char* data, size_t length, unsigned char* encoded_data);
+
 // Utility method to decode base64 encoded strings.  Also not extremely
 // performant.
 // Returns true unless the string could not be correctly decoded.
 bool base64_decode(const std::string& in, std::string* out);
+int64_t base64_decode(const char* data, size_t length, char* decoded_data);
 
 // Replaces &, < and > with &amp;, &lt; and &gt; respectively. This is
 // not the full set of required encodings, but one that should be
@@ -54,6 +56,8 @@ bool base64_decode(const std::string& in, std::string* out);
 // judiciously.
 void escape_for_html(const std::string& in, std::stringstream* out);
 
-}
+// Same as above, but returns a string.
+std::string escape_for_html_to_string(const std::string& in);
+} // namespace doris
 
 #endif

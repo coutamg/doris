@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -18,28 +15,24 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "exec/plain_text_line_reader.h"
-
 #include <gtest/gtest.h>
 
-#include "exec/local_file_reader.h"
 #include "exec/decompressor.h"
+#include "exec/local_file_reader.h"
+#include "exec/plain_text_line_reader.h"
 #include "util/runtime_profile.h"
 
-namespace palo {
+namespace doris {
 
 class PlainTextLineReaderTest : public testing::Test {
 public:
-    PlainTextLineReaderTest() : _profile(&_obj_pool, "TestProfile") {
-    }
+    PlainTextLineReaderTest() : _profile("TestProfile") {}
 
 protected:
-    virtual void SetUp() {
-    }
-    virtual void TearDown() {
-    }
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+
 private:
-    ObjectPool _obj_pool;
     RuntimeProfile _profile;
 };
 
@@ -53,7 +46,7 @@ TEST_F(PlainTextLineReaderTest, uncompressed_normal_use) {
     ASSERT_TRUE(st.ok());
     ASSERT_TRUE(decompressor == nullptr);
 
-    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, -1, '\n');
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, -1, "\n", 1);
     const uint8_t* ptr;
     size_t size;
     bool eof;
@@ -94,6 +87,42 @@ TEST_F(PlainTextLineReaderTest, uncompressed_normal_use) {
     ASSERT_TRUE(eof);
 }
 
+TEST_F(PlainTextLineReaderTest, uncompressed_no_newline) {
+    LocalFileReader file_reader("./be/test/exec/test_data/plain_text_line_reader/no_newline.csv",
+                                0);
+    auto st = file_reader.open();
+    ASSERT_TRUE(st.ok());
+
+    Decompressor* decompressor;
+    st = Decompressor::create_decompressor(CompressType::UNCOMPRESSED, &decompressor);
+    ASSERT_TRUE(st.ok());
+    ASSERT_TRUE(decompressor == nullptr);
+
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, -1, "\n", 1);
+    const uint8_t* ptr;
+    size_t size;
+    bool eof;
+
+    // 1,2,3
+    st = line_reader.read_line(&ptr, &size, &eof);
+    ASSERT_TRUE(st.ok());
+    ASSERT_EQ(5, size);
+    ASSERT_STREQ("1,2,3", std::string((char*)ptr, size).c_str());
+    ASSERT_FALSE(eof);
+
+    // 4,5
+    st = line_reader.read_line(&ptr, &size, &eof);
+    ASSERT_TRUE(st.ok());
+    ASSERT_EQ(3, size);
+    ASSERT_STREQ("4,5", std::string((char*)ptr, size).c_str());
+    ASSERT_FALSE(eof);
+
+    // Empty
+    st = line_reader.read_line(&ptr, &size, &eof);
+    ASSERT_TRUE(st.ok());
+    ASSERT_TRUE(eof);
+}
+
 TEST_F(PlainTextLineReaderTest, uncompressed_test_limit) {
     LocalFileReader file_reader("./be/test/exec/test_data/plain_text_line_reader/limit.csv", 0);
     auto st = file_reader.open();
@@ -104,7 +133,7 @@ TEST_F(PlainTextLineReaderTest, uncompressed_test_limit) {
     ASSERT_TRUE(st.ok());
     ASSERT_TRUE(decompressor == nullptr);
 
-    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 8, '\n');
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 8, "\n", 1);
     const uint8_t* ptr;
     size_t size;
     bool eof;
@@ -141,7 +170,7 @@ TEST_F(PlainTextLineReaderTest, uncompressed_test_limit2) {
     ASSERT_TRUE(st.ok());
     ASSERT_TRUE(decompressor == nullptr);
 
-    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 6, '\n');
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 6, "\n", 1);
     const uint8_t* ptr;
     size_t size;
     bool eof;
@@ -167,7 +196,7 @@ TEST_F(PlainTextLineReaderTest, uncompressed_test_limit3) {
     ASSERT_TRUE(st.ok());
     ASSERT_TRUE(decompressor == nullptr);
 
-    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 7, '\n');
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 7, "\n", 1);
     const uint8_t* ptr;
     size_t size;
     bool eof;
@@ -198,7 +227,7 @@ TEST_F(PlainTextLineReaderTest, uncompressed_test_limit4) {
     ASSERT_TRUE(st.ok());
     ASSERT_TRUE(decompressor == nullptr);
 
-    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 7, '\n');
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 7, "\n", 1);
     const uint8_t* ptr;
     size_t size;
     bool eof;
@@ -229,7 +258,7 @@ TEST_F(PlainTextLineReaderTest, uncompressed_test_limit5) {
     ASSERT_TRUE(st.ok());
     ASSERT_TRUE(decompressor == nullptr);
 
-    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 0, '\n');
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 0, "\n", 1);
     const uint8_t* ptr;
     size_t size;
     bool eof;
@@ -240,15 +269,36 @@ TEST_F(PlainTextLineReaderTest, uncompressed_test_limit5) {
     ASSERT_TRUE(eof);
 }
 
-} // end namespace palo
+TEST_F(PlainTextLineReaderTest, uncompressed_test_empty) {
+    LocalFileReader file_reader("./be/test/exec/test_data/plain_text_line_reader/empty.txt", 0);
+    auto st = file_reader.open();
+    ASSERT_TRUE(st.ok());
+
+    Decompressor* decompressor;
+    st = Decompressor::create_decompressor(CompressType::UNCOMPRESSED, &decompressor);
+    ASSERT_TRUE(st.ok());
+    ASSERT_TRUE(decompressor == nullptr);
+
+    // set min length larger than 0 to test
+    PlainTextLineReader line_reader(&_profile, &file_reader, decompressor, 10, "\n", 1);
+    const uint8_t* ptr;
+    size_t size;
+    bool eof;
+
+    st = line_reader.read_line(&ptr, &size, &eof);
+    ASSERT_TRUE(st.ok());
+    ASSERT_TRUE(eof);
+}
+
+} // end namespace doris
 
 int main(int argc, char** argv) {
-    // std::string conffile = std::string(getenv("PALO_HOME")) + "/conf/be.conf";
-    // if (!palo::config::init(conffile.c_str(), false)) {
+    // std::string conffile = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    // if (!doris::config::init(conffile.c_str(), false)) {
     //     fprintf(stderr, "error read config file. \n");
     //     return -1;
     // }
-    // palo::init_glog("be-test");
+    // doris::init_glog("be-test");
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

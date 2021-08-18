@@ -1,6 +1,3 @@
-// Modifications copyright (C) 2017, Baidu.com, Inc.
-// Copyright 2017 The Apache Software Foundation
-
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -20,36 +17,39 @@
 
 #include "exprs/like_predicate.h"
 
-#include <sstream>
 #include <string.h>
+
+#include <sstream>
 
 #include "exprs/string_functions.h"
 #include "runtime/string_value.hpp"
 
-namespace palo {
+namespace doris {
 
 // A regex to match any regex pattern is equivalent to a substring search.
 static const RE2 SUBSTRING_RE(
-    "(?:\\.\\*)*([^\\.\\^\\{\\[\\(\\|\\)\\]\\}\\+\\*\\?\\$\\\\]*)(?:\\.\\*)*");
+        "(?:\\.\\*)*([^\\.\\^\\{\\[\\(\\|\\)\\]\\}\\+\\*\\?\\$\\\\]*)(?:\\.\\*)*");
 
 // A regex to match any regex pattern which is equivalent to matching a constant string
 // at the end of the string values.
-static const RE2 ENDS_WITH_RE(
-    "(?:\\.\\*)*([^\\.\\^\\{\\[\\(\\|\\)\\]\\}\\+\\*\\?\\$\\\\]*)\\$");
+static const RE2 ENDS_WITH_RE("(?:\\.\\*)*([^\\.\\^\\{\\[\\(\\|\\)\\]\\}\\+\\*\\?\\$\\\\]*)\\$");
 
 // A regex to match any regex pattern which is equivalent to matching a constant string
 // at the end of the string values.
-static const RE2 STARTS_WITH_RE(
-    "\\^([^\\.\\^\\{\\[\\(\\|\\)\\]\\}\\+\\*\\?\\$\\\\]*)(?:\\.\\*)*");
+static const RE2 STARTS_WITH_RE("\\^([^\\.\\^\\{\\[\\(\\|\\)\\]\\}\\+\\*\\?\\$\\\\]*)(?:\\.\\*)*");
 
 // A regex to match any regex pattern which is equivalent to a constant string match.
 static const RE2 EQUALS_RE("\\^([^\\.\\^\\{\\[\\(\\|\\)\\]\\}\\+\\*\\?\\$\\\\]*)\\$");
 
-void LikePredicate::init() {
-}
+static const re2::RE2 LIKE_SUBSTRING_RE("(?:%+)(((\\\\%)|(\\\\_)|([^%_]))+)(?:%+)");
+static const re2::RE2 LIKE_ENDS_WITH_RE("(?:%+)(((\\\\%)|(\\\\_)|([^%_]))+)");
+static const re2::RE2 LIKE_STARTS_WITH_RE("(((\\\\%)|(\\\\_)|([^%_]))+)(?:%+)");
+static const re2::RE2 LIKE_EQUALS_RE("(((\\\\%)|(\\\\_)|([^%_]))+)");
 
-void LikePredicate::like_prepare(
-        FunctionContext* context, FunctionContext::FunctionStateScope scope) {
+void LikePredicate::init() {}
+
+void LikePredicate::like_prepare(FunctionContext* context,
+                                 FunctionContext::FunctionStateScope scope) {
     if (scope != FunctionContext::THREAD_LOCAL) {
         return;
     }
@@ -62,30 +62,29 @@ void LikePredicate::like_prepare(
             return;
         }
         StringValue pattern = StringValue::from_string_val(pattern_val);
-        re2::RE2 substring_re("(?:%+)([^%_]*)(?:%+)");
-        re2::RE2 ends_with_re("(?:%+)([^%_]*)");
-        re2::RE2 starts_with_re("([^%_]*)(?:%+)");
-        re2::RE2 equals_re("([^%_]*)");
         std::string pattern_str(pattern.ptr, pattern.len);
         std::string search_string;
-        if (RE2::FullMatch(pattern_str, substring_re, &search_string)) {
-            state->set_search_string(search_string);
-            state->function = constant_substring_fn;
-        } else if (RE2::FullMatch(pattern_str, starts_with_re, &search_string)) {
-            state->set_search_string(search_string);
-            state->function = constant_starts_with_fn;
-        } else if (RE2::FullMatch(pattern_str, ends_with_re, &search_string)) {
+        if (RE2::FullMatch(pattern_str, LIKE_ENDS_WITH_RE, &search_string)) {
+            remove_escape_character(&search_string);
             state->set_search_string(search_string);
             state->function = constant_ends_with_fn;
-        } else if (RE2::FullMatch(pattern_str, equals_re, &search_string)) {
+        } else if (RE2::FullMatch(pattern_str, LIKE_SUBSTRING_RE, &search_string)) {
+            remove_escape_character(&search_string);
+            state->set_search_string(search_string);
+            state->function = constant_substring_fn;
+        } else if (RE2::FullMatch(pattern_str, LIKE_EQUALS_RE, &search_string)) {
+            remove_escape_character(&search_string);
             state->set_search_string(search_string);
             state->function = constant_equals_fn;
+        } else if (RE2::FullMatch(pattern_str, LIKE_STARTS_WITH_RE, &search_string)) {
+            remove_escape_character(&search_string);
+            state->set_search_string(search_string);
+            state->function = constant_starts_with_fn;
         } else {
             std::string re_pattern;
-            convert_like_pattern(
-                context,
-                *reinterpret_cast<StringVal*>(context->get_constant_arg(1)), 
-                &re_pattern);
+            convert_like_pattern(context,
+                                 *reinterpret_cast<StringVal*>(context->get_constant_arg(1)),
+                                 &re_pattern);
             RE2::Options opts;
             opts.set_never_nl(false);
             opts.set_dot_nl(true);
@@ -97,28 +96,24 @@ void LikePredicate::like_prepare(
     }
 }
 
-BooleanVal LikePredicate::like(
-        FunctionContext* context, 
-        const StringVal& val,
-        const StringVal& pattern) {
+BooleanVal LikePredicate::like(FunctionContext* context, const StringVal& val,
+                               const StringVal& pattern) {
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     return (state->function)(context, val, pattern);
 }
 
-void LikePredicate::like_close(
-        FunctionContext* context,
-        FunctionContext::FunctionStateScope scope) {
+void LikePredicate::like_close(FunctionContext* context,
+                               FunctionContext::FunctionStateScope scope) {
     if (scope == FunctionContext::THREAD_LOCAL) {
         LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-            context->get_function_state(FunctionContext::THREAD_LOCAL));
+                context->get_function_state(FunctionContext::THREAD_LOCAL));
         delete state;
     }
 }
 
-void LikePredicate::regex_prepare(
-        FunctionContext* context,
-        FunctionContext::FunctionStateScope scope) {
+void LikePredicate::regex_prepare(FunctionContext* context,
+                                  FunctionContext::FunctionStateScope scope) {
     if (scope != FunctionContext::THREAD_LOCAL) {
         return;
     }
@@ -165,17 +160,17 @@ void LikePredicate::regex_prepare(
     }
 }
 
-BooleanVal LikePredicate::regex(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::regex(FunctionContext* context, const StringVal& val,
+                                const StringVal& pattern) {
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     return (state->function)(context, val, pattern);
 }
 
 // This prepare function is used only when 3 parameters are passed to the regexp_like()
 // function. For the 2 parameter version, the RegexPrepare() function is used to prepare.
-void LikePredicate::regexp_like_prepare(
-        FunctionContext* context, FunctionContext::FunctionStateScope scope) {
+void LikePredicate::regexp_like_prepare(FunctionContext* context,
+                                        FunctionContext::FunctionStateScope scope) {
     if (scope != FunctionContext::THREAD_LOCAL) {
         return;
     }
@@ -215,11 +210,8 @@ void LikePredicate::regexp_like_prepare(
 
 // This is used only for the 3 parameter version of regexp_like(). The 2 parameter
 // version calls Regex() directly.
-BooleanVal LikePredicate::regexp_like(
-        FunctionContext* context, 
-        const StringVal& val,
-        const StringVal& pattern, 
-        const StringVal& match_parameter) {
+BooleanVal LikePredicate::regexp_like(FunctionContext* context, const StringVal& val,
+                                      const StringVal& pattern, const StringVal& match_parameter) {
     if (val.is_null || pattern.is_null) {
         return BooleanVal::null();
     }
@@ -238,8 +230,8 @@ BooleanVal LikePredicate::regexp_like(
         std::string re_pattern(reinterpret_cast<const char*>(pattern.ptr), pattern.len);
         re2::RE2 re(re_pattern, opts);
         if (re.ok()) {
-            return RE2::PartialMatch(re2::StringPiece(
-                    reinterpret_cast<const char*>(val.ptr), val.len), re);
+            return RE2::PartialMatch(
+                    re2::StringPiece(reinterpret_cast<const char*>(val.ptr), val.len), re);
         } else {
             context->set_error("Invalid regex: $0");
             return BooleanVal(false);
@@ -248,32 +240,32 @@ BooleanVal LikePredicate::regexp_like(
     return constant_regex_fn_partial(context, val, pattern);
 }
 
-void LikePredicate::regex_close(
-        FunctionContext* context, FunctionContext::FunctionStateScope scope) {
+void LikePredicate::regex_close(FunctionContext* context,
+                                FunctionContext::FunctionStateScope scope) {
     if (scope == FunctionContext::THREAD_LOCAL) {
         LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-            context->get_function_state(FunctionContext::THREAD_LOCAL));
+                context->get_function_state(FunctionContext::THREAD_LOCAL));
         delete state;
     }
 }
 
-BooleanVal LikePredicate::regex_fn(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::regex_fn(FunctionContext* context, const StringVal& val,
+                                   const StringVal& pattern) {
     return regex_match(context, val, pattern, false);
 }
 
-BooleanVal LikePredicate::like_fn(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::like_fn(FunctionContext* context, const StringVal& val,
+                                  const StringVal& pattern) {
     return regex_match(context, val, pattern, true);
 }
 
-BooleanVal LikePredicate::constant_substring_fn(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::constant_substring_fn(FunctionContext* context, const StringVal& val,
+                                                const StringVal& pattern) {
     if (val.is_null) {
         return BooleanVal::null();
     }
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     if (state->search_string_sv.len == 0) {
         return BooleanVal(true);
     }
@@ -281,89 +273,87 @@ BooleanVal LikePredicate::constant_substring_fn(
     return BooleanVal(state->substring_pattern.search(&pattern_value) != -1);
 }
 
-BooleanVal LikePredicate::constant_starts_with_fn(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::constant_starts_with_fn(FunctionContext* context, const StringVal& val,
+                                                  const StringVal& pattern) {
     if (val.is_null) {
         return BooleanVal::null();
     }
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     if (val.len < state->search_string_sv.len) {
         return BooleanVal(false);
     } else {
-        StringValue v =
-            StringValue(reinterpret_cast<char*>(val.ptr), state->search_string_sv.len);
+        StringValue v = StringValue(reinterpret_cast<char*>(val.ptr), state->search_string_sv.len);
         return BooleanVal(state->search_string_sv.eq((v)));
     }
 }
 
-BooleanVal LikePredicate::constant_ends_with_fn(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::constant_ends_with_fn(FunctionContext* context, const StringVal& val,
+                                                const StringVal& pattern) {
     if (val.is_null) {
         return BooleanVal::null();
     }
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     if (val.len < state->search_string_sv.len) {
         return BooleanVal(false);
     } else {
-        char* ptr =
-            reinterpret_cast<char*>(val.ptr) + val.len - state->search_string_sv.len;
+        char* ptr = reinterpret_cast<char*>(val.ptr) + val.len - state->search_string_sv.len;
         int len = state->search_string_sv.len;
         StringValue v = StringValue(ptr, len);
         return BooleanVal(state->search_string_sv.eq(v));
     }
 }
 
-BooleanVal LikePredicate::constant_equals_fn(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::constant_equals_fn(FunctionContext* context, const StringVal& val,
+                                             const StringVal& pattern) {
     if (val.is_null) {
         return BooleanVal::null();
     }
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     return BooleanVal(state->search_string_sv.eq(StringValue::from_string_val(val)));
 }
 
-BooleanVal LikePredicate::constant_regex_fn_partial(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::constant_regex_fn_partial(FunctionContext* context, const StringVal& val,
+                                                    const StringVal& pattern) {
     if (val.is_null) {
         return BooleanVal::null();
     }
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     re2::StringPiece operand_sp(reinterpret_cast<const char*>(val.ptr), val.len);
     return RE2::PartialMatch(operand_sp, *state->regex);
 }
 
-BooleanVal LikePredicate::constant_regex_fn(
-        FunctionContext* context, const StringVal& val, const StringVal& pattern) {
+BooleanVal LikePredicate::constant_regex_fn(FunctionContext* context, const StringVal& val,
+                                            const StringVal& pattern) {
     if (val.is_null) {
         return BooleanVal::null();
     }
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     re2::StringPiece operand_sp(reinterpret_cast<const char*>(val.ptr), val.len);
     return RE2::FullMatch(operand_sp, *state->regex);
 }
 
-BooleanVal LikePredicate::regex_match(
-        FunctionContext* context,
-        const StringVal& operand_value, 
-        const StringVal& pattern_value,
-        bool is_like_pattern) {
+BooleanVal LikePredicate::regex_match(FunctionContext* context, const StringVal& operand_value,
+                                      const StringVal& pattern_value, bool is_like_pattern) {
     if (operand_value.is_null || pattern_value.is_null) {
         return BooleanVal::null();
     }
     if (context->is_arg_constant(1)) {
         LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-            context->get_function_state(FunctionContext::THREAD_LOCAL));
+                context->get_function_state(FunctionContext::THREAD_LOCAL));
         if (is_like_pattern) {
-            return RE2::FullMatch(re2::StringPiece(reinterpret_cast<const char*>(
-                        operand_value.ptr), operand_value.len), *state->regex.get());
+            return RE2::FullMatch(re2::StringPiece(reinterpret_cast<const char*>(operand_value.ptr),
+                                                   operand_value.len),
+                                  *state->regex.get());
         } else {
-            return RE2::PartialMatch(re2::StringPiece(reinterpret_cast<const char*>(
-                        operand_value.ptr), operand_value.len), *state->regex.get());
+            return RE2::PartialMatch(
+                    re2::StringPiece(reinterpret_cast<const char*>(operand_value.ptr),
+                                     operand_value.len),
+                    *state->regex.get());
         }
     } else {
         std::string re_pattern;
@@ -373,17 +363,21 @@ BooleanVal LikePredicate::regex_match(
         if (is_like_pattern) {
             convert_like_pattern(context, pattern_value, &re_pattern);
         } else {
-            re_pattern =
-                std::string(reinterpret_cast<const char*>(pattern_value.ptr), pattern_value.len);
+            re_pattern = std::string(reinterpret_cast<const char*>(pattern_value.ptr),
+                                     pattern_value.len);
         }
         re2::RE2 re(re_pattern, opts);
         if (re.ok()) {
             if (is_like_pattern) {
-                return RE2::FullMatch(re2::StringPiece(
-                        reinterpret_cast<const char*>(operand_value.ptr), operand_value.len), re);
+                return RE2::FullMatch(
+                        re2::StringPiece(reinterpret_cast<const char*>(operand_value.ptr),
+                                         operand_value.len),
+                        re);
             } else {
-                return RE2::PartialMatch(re2::StringPiece(
-                        reinterpret_cast<const char*>(operand_value.ptr), operand_value.len), re);
+                return RE2::PartialMatch(
+                        re2::StringPiece(reinterpret_cast<const char*>(operand_value.ptr),
+                                         operand_value.len),
+                        re);
             }
         } else {
             context->set_error("Invalid regex: $0");
@@ -392,13 +386,11 @@ BooleanVal LikePredicate::regex_match(
     }
 }
 
-void LikePredicate::convert_like_pattern(
-        FunctionContext* context, 
-        const StringVal& pattern,
-        std::string* re_pattern) {
+void LikePredicate::convert_like_pattern(FunctionContext* context, const StringVal& pattern,
+                                         std::string* re_pattern) {
     re_pattern->clear();
     LikePredicateState* state = reinterpret_cast<LikePredicateState*>(
-        context->get_function_state(FunctionContext::THREAD_LOCAL));
+            context->get_function_state(FunctionContext::THREAD_LOCAL));
     bool is_escaped = false;
     for (int i = 0; i < pattern.len; ++i) {
         if (!is_escaped && pattern.ptr[i] == '%') {
@@ -408,22 +400,11 @@ void LikePredicate::convert_like_pattern(
             // check for escape char before checking for regex special chars, they might overlap
         } else if (!is_escaped && pattern.ptr[i] == state->escape_char) {
             is_escaped = true;
-        } else if (
-            pattern.ptr[i] == '.'
-            || pattern.ptr[i] == '['
-            || pattern.ptr[i] == ']'
-            || pattern.ptr[i] == '{'
-            || pattern.ptr[i] == '}'
-            || pattern.ptr[i] == '('
-            || pattern.ptr[i] == ')'
-            || pattern.ptr[i] == '\\'
-            || pattern.ptr[i] == '*'
-            || pattern.ptr[i] == '+'
-            || pattern.ptr[i] == '?'
-            || pattern.ptr[i] == '|'
-            || pattern.ptr[i] == '^'
-            || pattern.ptr[i] == '$'
-            ) {
+        } else if (pattern.ptr[i] == '.' || pattern.ptr[i] == '[' || pattern.ptr[i] == ']' ||
+                   pattern.ptr[i] == '{' || pattern.ptr[i] == '}' || pattern.ptr[i] == '(' ||
+                   pattern.ptr[i] == ')' || pattern.ptr[i] == '\\' || pattern.ptr[i] == '*' ||
+                   pattern.ptr[i] == '+' || pattern.ptr[i] == '?' || pattern.ptr[i] == '|' ||
+                   pattern.ptr[i] == '^' || pattern.ptr[i] == '$') {
             // escape all regex special characters; see list at
             re_pattern->append("\\");
             re_pattern->append(1, pattern.ptr[i]);
@@ -436,4 +417,20 @@ void LikePredicate::convert_like_pattern(
     }
 }
 
+void LikePredicate::remove_escape_character(std::string* search_string) {
+    std::string tmp_search_string;
+    tmp_search_string.swap(*search_string);
+    int len = tmp_search_string.length();
+    for (int i = 0; i < len;) {
+        if (tmp_search_string[i] == '\\' && i + 1 < len &&
+            (tmp_search_string[i + 1] == '%' || tmp_search_string[i + 1] == '_')) {
+            search_string->append(1, tmp_search_string[i + 1]);
+            i += 2;
+        } else {
+            search_string->append(1, tmp_search_string[i]);
+            i++;
+        }
+    }
 }
+
+} // namespace doris
