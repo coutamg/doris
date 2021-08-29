@@ -50,6 +50,33 @@ class BaseCompaction;
 
 using TabletSharedPtr = std::shared_ptr<Tablet>;
 
+// tablet 应该是一个 be 上的一个表了，该表包括 Base, Cumulatives, Singletions 文件
+/*
+    任何时刻都存在一个 Base delta[0, B], 一系列的Cumulatives delta[B+1, B+10], [B+1, B+20],[B+1, B+30],...
+    以及 B 以后的所有 Singletions delta。每当第 B+10X 个版本合并时，就异步的生成 delta[B+1, B+10X]。新的
+    Base delta[0, B1]每天生成一次，但是这个新的base delta 在所有基于它的Cumulatives delta 还没完全生成之前是不可
+    用的。当Base delta B切换到B1时，这个策略就将老的 Base delta，Cumulatives delta以及所有 B1 版本之前的 
+    Singletions delta 删除。这样的话，一个查询就只需要一个 Base delta，一个 Cumulatives delta和几个
+    Singetions delta 组合完成，大大减少了查询时的工作量。
+
+                                                        +----+ <-------+
+                                                        | 61 |         |
+    +--------+       +-----+ +-----+ +-----+            +----+         |
+    | 0 - 60 |       |61-70| |61-80| |61-90|            +----+         |         
+    +--------+       +-----+ +-----+ +-----+            | 62 |         |       
+       Base                                             +----+
+                           Cumulatives                   ...         Singletions
+                                                        +----+
+                                                        | 91 |         |
+                                                        +----+         |
+                                                        +----+         |
+                                                        | 92 |         |
+                                                        +----+ <-------+
+    updated            updated every 10                  updated in
+    every day           versions                        near real-time
+
+
+*/
 class Tablet : public BaseTablet {
 public:
     static TabletSharedPtr create_tablet_from_meta(TabletMetaSharedPtr tablet_meta,
@@ -300,6 +327,7 @@ private:
     mutable RWMutex _meta_lock;
     // After version 0.13, all newly created rowsets are saved in _rs_version_map.
     // And if rowset being compacted, the old rowsetis will be saved in _stale_rs_version_map;
+    // 该表下面所有的 delta 文件
     std::unordered_map<Version, RowsetSharedPtr, HashOfVersion> _rs_version_map;
     // This variable _stale_rs_version_map is used to record these rowsets which are be compacted.
     // These _stale rowsets are been removed when rowsets' pathVersion is expired,

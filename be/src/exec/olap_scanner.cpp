@@ -61,6 +61,7 @@ OlapScanner::OlapScanner(RuntimeState* runtime_state, OlapScanNode* parent, bool
 
 OlapScanner::~OlapScanner() {}
 
+// OlapScanner查询参数构造
 Status OlapScanner::prepare(
         const TPaloScanRange& scan_range, const std::vector<OlapScanRange*>& key_ranges,
         const std::vector<TCondition>& filters,
@@ -70,6 +71,9 @@ Status OlapScanner::prepare(
     TTabletId tablet_id = scan_range.tablet_id;
     SchemaHash schema_hash = strtoul(scan_range.schema_hash.c_str(), nullptr, 10);
     _version = strtoul(scan_range.version.c_str(), nullptr, 10);
+
+    // 根据查询指定的version版本查找出需要读取的RowsetReader（依赖于版本管理的
+    // rowset_graph版本路径图，取得查询version范围的最短路径）
     {
         std::string err;
         _tablet = StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id, schema_hash,
@@ -95,6 +99,7 @@ Status OlapScanner::prepare(
             // to prevent this case: when there are lots of olap scanners to run for example 10000
             // the rowsets maybe compacted when the last olap scanner starts
             Version rd_version(0, _version);
+            // 这里就是找 rd_version 所对应的 delta 文件的 handle, 这里为啥从 0 开始？？
             OLAPStatus acquire_reader_st =
                     _tablet->capture_rs_readers(rd_version, &_params.rs_readers, _mem_tracker);
             if (acquire_reader_st != OLAP_SUCCESS) {

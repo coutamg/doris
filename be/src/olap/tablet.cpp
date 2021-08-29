@@ -674,6 +674,7 @@ OLAPStatus Tablet::capture_rs_readers(const std::vector<Version>& version_path,
             LOG(WARNING) << "failed to create reader for rowset:" << it->second->rowset_id();
             return OLAP_ERR_CAPTURE_ROWSET_READER_ERROR;
         }
+        // 这里汇集了多个 delta 文件的 RowsetReader
         rs_readers->push_back(std::move(rs_reader));
     }
     return OLAP_SUCCESS;
