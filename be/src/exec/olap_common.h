@@ -119,6 +119,14 @@ public:
 
     size_t get_fixed_value_size() const { return _fixed_values.size(); }
 
+
+    /*
+    struct TCondition {
+        1:  required string column_name
+        2:  required string condition_op
+        3:  required list<string> condition_values
+    }
+    */
     void to_olap_filter(std::vector<TCondition>& filters) {
         if (is_fixed_value_range()) {
             // 1. convert to in filter condition

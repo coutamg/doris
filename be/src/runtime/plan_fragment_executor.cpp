@@ -485,7 +485,9 @@ Status PlanFragmentExecutor::get_next_internal(RowBatch** batch) {
 
     while (!_done) {
         _row_batch->reset();
+        // 统计耗时
         SCOPED_TIMER(profile()->total_time_counter());
+        // 这里调用每个 node 对应的 get_next 函数实现 insert select 等
         RETURN_IF_ERROR(_plan->get_next(_runtime_state.get(), _row_batch.get(), &_done));
 
         if (_row_batch->num_rows() > 0) {

@@ -26,6 +26,7 @@
 # This script will run *download-thirdparty.sh* once again
 # to check if all thirdparties have been downloaded, unpacked and patched.
 #################################################################################
+# -DCMAKE_CXX_STANDARD=11
 set -e
 
 curdir=`dirname "$0"`
@@ -58,7 +59,8 @@ fi
 
 eval set -- "$OPTS"
 
-PARALLEL=$[$(nproc)/4+1]
+#PARALLEL=$[$(nproc)/4+1]
+PARALLEL=1
 if [[ $# -ne 1 ]] ; then
     while true; do
         case "$1" in
@@ -286,7 +288,7 @@ build_llvm() {
     mkdir -p llvm-build && cd llvm-build
     rm -rf CMakeCache.txt CMakeFiles/
     LDFLAGS="-L${TP_LIB_DIR} -static-libstdc++ -static-libgcc" \
-    ${CMAKE_CMD} -G "${GENERATOR}" -DLLVM_REQUIRES_RTTI:Bool=True -DLLVM_TARGETS_TO_BUILD=${LLVM_TARGET} -DLLVM_ENABLE_TERMINFO=OFF LLVM_BUILD_LLVM_DYLIB:BOOL=OFF -DLLVM_ENABLE_PIC=true -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE="RELEASE" -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR/llvm ../$LLVM_SOURCE
+    ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_CXX_STANDARD=11 -DLLVM_REQUIRES_RTTI:Bool=True -DLLVM_TARGETS_TO_BUILD=${LLVM_TARGET} -DLLVM_ENABLE_TERMINFO=OFF LLVM_BUILD_LLVM_DYLIB:BOOL=OFF -DLLVM_ENABLE_PIC=true -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE="RELEASE" -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR/llvm ../$LLVM_SOURCE
     ${BUILD_SYSTEM} -j $PARALLEL REQUIRES_RTTI=1 && ${BUILD_SYSTEM} install
 }
 
@@ -313,7 +315,7 @@ build_gflags() {
     cd $TP_SOURCE_DIR/$GFLAGS_SOURCE
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
     rm -rf CMakeCache.txt CMakeFiles/
-    ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
+    ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_CXX_STANDARD=11 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DCMAKE_POSITION_INDEPENDENT_CODE=On ../
     ${BUILD_SYSTEM} -j $PARALLEL && ${BUILD_SYSTEM} install
 }
@@ -327,7 +329,7 @@ build_glog() {
     rm -rf config.*
     autoreconf -i
 
-    CPPFLAGS="-I${TP_INCLUDE_DIR} -fpermissive -fPIC" \
+    CPPFLAGS="-I${TP_INCLUDE_DIR} -fpermissive -fPIC -std=c++11" \
     LDFLAGS="-L${TP_LIB_DIR}" \
     CFLAGS="-fPIC" \
     ./configure --prefix=$TP_INSTALL_DIR --enable-frame-pointers --disable-shared --enable-static
@@ -341,7 +343,7 @@ build_gtest() {
     cd $TP_SOURCE_DIR/$GTEST_SOURCE
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
     rm -rf CMakeCache.txt CMakeFiles/
-    ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
+    ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_CXX_STANDARD=11 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DCMAKE_POSITION_INDEPENDENT_CODE=On ../
     ${BUILD_SYSTEM} -j $PARALLEL && ${BUILD_SYSTEM} install
 }
@@ -361,7 +363,7 @@ build_snappy() {
 
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
     rm -rf CMakeCache.txt CMakeFiles/
-    CFLAGS="-O3" CXXFLAGS="-O3" ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
+    CFLAGS="-O3" CXXFLAGS="-O3" ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_CXX_STANDARD=11 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DCMAKE_POSITION_INDEPENDENT_CODE=On \
     -DCMAKE_INSTALL_INCLUDEDIR=$TP_INCLUDE_DIR/snappy \
     -DSNAPPY_BUILD_TESTS=0 ../
@@ -460,7 +462,7 @@ build_re2() {
     check_if_source_exist $RE2_SOURCE
     cd $TP_SOURCE_DIR/$RE2_SOURCE
 
-    ${CMAKE_CMD} -G "${GENERATOR}" -DBUILD_SHARED_LIBS=0 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR
+    ${CMAKE_CMD} -G "${GENERATOR}" -DCMAKE_CXX_STANDARD=11 -DBUILD_SHARED_LIBS=0 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR
     ${BUILD_SYSTEM} -j $PARALLEL install
 }
 
@@ -522,6 +524,7 @@ build_brpc() {
     cd $TP_SOURCE_DIR/$BRPC_SOURCE
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
     rm -rf CMakeCache.txt CMakeFiles/
+    CXXFLAGS="-std=c++11" \
     LDFLAGS="-L${TP_LIB_DIR} -static-libstdc++ -static-libgcc" \
     ${CMAKE_CMD} -G "${GENERATOR}" -DBUILD_SHARED_LIBS=0 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DBRPC_WITH_GLOG=ON -DWITH_GLOG=ON -DGFLAGS_LIBRARY=$TP_INSTALL_DIR/lib/libgflags.a -DGLOG_LIB=$TP_INSTALL_DIR/lib \
@@ -574,7 +577,7 @@ build_flatbuffers() {
   cd $TP_SOURCE_DIR/$FLATBUFFERS_SOURCE
   mkdir -p $BUILD_DIR && cd $BUILD_DIR
   rm -rf CMakeCache.txt CMakeFiles/
-  CXXFLAGS="-fPIC -Wno-class-memaccess" \
+  CXXFLAGS="-fPIC -Wno-class-memaccess -std=c++11" \
   LDFLAGS="-static-libstdc++ -static-libgcc" \
   ${CMAKE_CMD} -G "${GENERATOR}" ..
   ${BUILD_SYSTEM} -j $PARALLEL
@@ -599,7 +602,7 @@ build_arrow() {
 
     #--trace-expand \
     ${CMAKE_CMD} -G "${GENERATOR}" -DARROW_PARQUET=ON -DARROW_IPC=ON -DARROW_USE_GLOG=off \
-    -DARROW_BUILD_SHARED=OFF -DARROW_BUILD_STATIC=ON -DARROW_WITH_ZSTD=ON \
+    -DARROW_BUILD_SHARED=OFF -DARROW_BUILD_STATIC=ON -DARROW_WITH_ZSTD=ON -DCMAKE_CXX_STANDARD=11 \
     -DLZ4_INCLUDE_DIR=$TP_INSTALL_DIR \
     -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DCMAKE_INSTALL_LIBDIR=lib64 \
@@ -642,7 +645,7 @@ build_s2() {
     rm -rf CMakeCache.txt CMakeFiles/
     CXXFLAGS="-O3" \
     LDFLAGS="-L${TP_LIB_DIR} -static-libstdc++ -static-libgcc" \
-    ${CMAKE_CMD} -G "${GENERATOR}" -DBUILD_SHARED_LIBS=0 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
+    ${CMAKE_CMD} -G "${GENERATOR}" -DBUILD_SHARED_LIBS=0 -DCMAKE_CXX_STANDARD=11 -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DCMAKE_INCLUDE_PATH="$TP_INSTALL_DIR/include" \
     -DBUILD_SHARED_LIBS=OFF \
     -DGFLAGS_ROOT_DIR="$TP_INSTALL_DIR/include" \
@@ -711,7 +714,7 @@ build_croaringbitmap() {
     cd $TP_SOURCE_DIR/$CROARINGBITMAP_SOURCE
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
     rm -rf CMakeCache.txt CMakeFiles/
-    CXXFLAGS="-O3" \
+    CXXFLAGS="-O3 -std=c++11" \
     LDFLAGS="-L${TP_LIB_DIR} -static-libstdc++ -static-libgcc" \
     ${CMAKE_CMD} -G "${GENERATOR}" -DROARING_BUILD_STATIC=ON -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DCMAKE_INCLUDE_PATH="$TP_INSTALL_DIR/include" \
@@ -725,7 +728,7 @@ build_fmt() {
     cd $TP_SOURCE_DIR/$FMT_SOURCE
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
     rm -rf CMakeCache.txt CMakeFiles/
-    $CMAKE_CMD -G "${GENERATOR}" -DBUILD_SHARED_LIBS=FALSE -DFMT_TEST=OFF -DFMT_DOC=OFF -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR ..
+    $CMAKE_CMD -G "${GENERATOR}" -DCMAKE_CXX_STANDARD=11 -DBUILD_SHARED_LIBS=FALSE -DFMT_TEST=OFF -DFMT_DOC=OFF -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR ..
     ${BUILD_SYSTEM} -j$PARALLEL && ${BUILD_SYSTEM} install
 }
 
@@ -742,7 +745,7 @@ build_orc() {
     cd $TP_SOURCE_DIR/$ORC_SOURCE
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
     rm -rf CMakeCache.txt CMakeFiles/
-    CXXFLAGS="-O3 -Wno-array-bounds" \
+    CXXFLAGS="-O3 -stc=c++11 -Wno-array-bounds" \
     ${CMAKE_CMD} -G "${GENERATOR}" ../ -DBUILD_JAVA=OFF \
     -DPROTOBUF_HOME=$TP_INSTALL_DIR \
     -DSNAPPY_HOME=$TP_INSTALL_DIR \
@@ -851,7 +854,7 @@ build_aws_sdk() {
     check_if_source_exist $AWS_SDK_SOURCE
     cd $TP_SOURCE_DIR/$AWS_SDK_SOURCE
     mkdir -p $BUILD_DIR && cd $BUILD_DIR
-    $CMAKE_CMD -G "${GENERATOR}" .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
+    $CMAKE_CMD -G "${GENERATOR}" .. -DCMAKE_CXX_STANDARD=11 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$TP_INSTALL_DIR \
     -DBUILD_DEPS=OFF -DCMAKE_PREFIX_PATH=$TP_INSTALL_DIR -DBUILD_SHARED_LIBS=OFF -DENABLE_TESTING=OFF \
     -DCMAKE_MODULE_PATH=$TP_INSTALL_DIR/lib64/cmake -DBUILD_ONLY="s3"
     ${BUILD_SYSTEM} -j $PARALLEL && ${BUILD_SYSTEM} install

@@ -125,6 +125,9 @@ Status OlapScanner::open() {
 
     _runtime_filter_marks.resize(_parent->runtime_filter_descs().size(), false);
 
+    /*
+        -> Reader::init
+    */
     auto res = _reader->init(_params);
     if (res != OLAP_SUCCESS) {
         OLAP_LOG_WARNING("fail to init reader.[res=%d]", res);

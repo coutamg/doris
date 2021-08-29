@@ -136,6 +136,7 @@ OLAPStatus Reader::init(const ReaderParams& read_params) {
         return OLAP_SUCCESS;
     }
 
+    // 这里根据 key 的类型提供了三种读取模式
     switch (_tablet->keys_type()) {
     case KeysType::DUP_KEYS:
         _next_row_func = &Reader::_direct_next_row;
@@ -415,6 +416,7 @@ OLAPStatus Reader::_capture_rs_readers(const ReaderParams& read_params,
             valid_rs_readers->push_back(rs_reader);
         }
     }
+    // valid_rs_readers 里面用的是 RowsetReader 来于底层的数据文件交互
     _collect_iter->build_heap(*valid_rs_readers);
     _next_key = _collect_iter->current_row(&_next_delete_flag);
     return OLAP_SUCCESS;

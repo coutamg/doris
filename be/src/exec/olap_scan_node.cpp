@@ -74,9 +74,13 @@ Status OlapScanNode::init(const TPlanNode& tnode, RuntimeState* state) {
     if (query_options.__isset.max_scan_key_num) {
         _max_scan_key_num = query_options.max_scan_key_num;
     } else {
+        // 默认最大扫描 1024
         _max_scan_key_num = config::doris_max_scan_key_num;
     }
 
+    // __isset 参考 https://www.jianshu.com/p/383723cf982e
+    // __isset__isset.max_pushdown_conditions_per_column 表示 
+    //  thrift 中的 optional max_pushdown_conditions_per_column 是否赋值了 
     if (query_options.__isset.max_pushdown_conditions_per_column) {
         _max_pushdown_conditions_per_column = query_options.max_pushdown_conditions_per_column;
     } else {

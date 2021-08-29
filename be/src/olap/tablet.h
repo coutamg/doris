@@ -304,6 +304,7 @@ private:
     // This variable _stale_rs_version_map is used to record these rowsets which are be compacted.
     // These _stale rowsets are been removed when rowsets' pathVersion is expired,
     // this policy is judged and computed by TimestampedVersionTracker.
+    // 为了事物隔离级别的操作？？ 哪不应该 compaction 呀
     std::unordered_map<Version, RowsetSharedPtr, HashOfVersion> _stale_rs_version_map;
     // if this tablet is broken, set to true. default is false
     std::atomic<bool> _is_bad;

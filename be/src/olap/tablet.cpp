@@ -556,6 +556,8 @@ bool Tablet::_reconstruct_version_tracker_if_necessary() {
     return false;
 }
 
+// version_path 里面其实是包含了 spec_version.start_version 到 spec_version.end_version 所要遍历的
+// delta 文件，里面应该包含 base 文件吧
 OLAPStatus Tablet::capture_consistent_versions(const Version& spec_version,
                                                std::vector<Version>* version_path) const {
     OLAPStatus status =
@@ -651,11 +653,13 @@ OLAPStatus Tablet::capture_rs_readers(const std::vector<Version>& version_path,
                                       std::shared_ptr<MemTracker> parent_tracker) const {
     DCHECK(rs_readers != nullptr && rs_readers->empty());
     for (auto version : version_path) {
+        // version 对应的就是一个 delta 文件
         auto it = _rs_version_map.find(version);
         if (it == _rs_version_map.end()) {
             VLOG_NOTICE << "fail to find Rowset in rs_version for version. tablet=" << full_name()
                         << ", version='" << version.first << "-" << version.second;
 
+            // 这里会不会是 base 文件
             it = _stale_rs_version_map.find(version);
             if (it == _rs_version_map.end()) {
                 LOG(WARNING) << "fail to find Rowset in stale_rs_version for version. tablet="
@@ -664,7 +668,7 @@ OLAPStatus Tablet::capture_rs_readers(const std::vector<Version>& version_path,
                 return OLAP_ERR_CAPTURE_ROWSET_READER_ERROR;
             }
         }
-        RowsetReaderSharedPtr rs_reader;
+        RowsetReaderSharedPtr rs_reader; // 操作对应的 delta 文件的 handle
         auto res = it->second->create_reader(parent_tracker, &rs_reader);
         if (res != OLAP_SUCCESS) {
             LOG(WARNING) << "failed to create reader for rowset:" << it->second->rowset_id();

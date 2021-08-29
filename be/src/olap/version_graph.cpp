@@ -561,6 +561,7 @@ void VersionGraph::_add_vertex_to_graph(int64_t vertex_value) {
 
 OLAPStatus VersionGraph::capture_consistent_versions(const Version& spec_version,
                                                      std::vector<Version>* version_path) const {
+    // 传入的 start version 大于 end version 则不会有任何 delta 文件对应，所以出错了
     if (spec_version.first > spec_version.second) {
         LOG(WARNING) << "invalid specified version. "
                      << "spec_version=" << spec_version.first << "-" << spec_version.second;
@@ -568,6 +569,7 @@ OLAPStatus VersionGraph::capture_consistent_versions(const Version& spec_version
     }
 
     int64_t cur_idx = -1;
+    // 找到 start version 对应的图的顶点
     for (size_t i = 0; i < _version_graph.size(); i++) {
         if (_version_graph[i].value == spec_version.first) {
             cur_idx = i;
@@ -581,11 +583,16 @@ OLAPStatus VersionGraph::capture_consistent_versions(const Version& spec_version
         return OLAP_ERR_VERSION_NOT_EXIST;
     }
 
+    // end version
     int64_t end_value = spec_version.second + 1;
+ 
+    // 其实图的起点代表的是 delta 文件的 start_version, 图边所对应的顶点则表示 delta 文件的 end_version
+    // 一个图有多少条边就表示有多少个以不同 end_version 结束的 delta 文件，这些文件的 start_verion 相同
     while (_version_graph[cur_idx].value < end_value) {
         int64_t next_idx = -1;
         for (const auto& it : _version_graph[cur_idx].edges) {
             // Only consider incremental versions
+            // 这些边是按照其顶点的 value 降序排列
             if (_version_graph[it].value < _version_graph[cur_idx].value) {
                 break;
             }
@@ -596,14 +603,17 @@ OLAPStatus VersionGraph::capture_consistent_versions(const Version& spec_version
 
             // Considering edges had been sorted by version in descending order,
             // This version is the largest version that smaller than end_version.
+            // start_version < now_version < end_version
             next_idx = it;
             break;
         }
 
+        // 找到的最接近 end_version 的 now_version
         if (next_idx > -1) {
             if (version_path != nullptr) {
                 version_path->emplace_back(_version_graph[cur_idx].value, _version_graph[next_idx].value - 1);
             }
+            // 以该点为起点继续寻找接近 end_version 的点
             cur_idx = next_idx;
         } else {
             LOG(WARNING) << "fail to find path in version_graph. "

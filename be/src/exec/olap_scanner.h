@@ -46,7 +46,22 @@ class OlapScanNode;
 class OLAPReader;
 class RuntimeProfile;
 class Field;
-
+/*
+1. OlapScanner对一个tablet(可以理解为chunk)数据读取操作整体的封装
+2. Reader对读取的参数进行处理，并提供了按三种不同模型读取的差异化处理。
+3. CollectIterator包含了tablet中多个RowsetReader，这些RowsetReader有版本顺序，
+    CollectIterator将这些RowsetReader归并Merge成统一的Iterator功能，提供了归并的
+    比较器。
+4. RowsetReader则负责了对一个Rowset的读取。
+5. RowwiseIterator提供了一个Rowset中所有Segment的统一访问的Iterator功能。这里
+    的归并策略可以根据数据排序的情况采用Merge或Union。
+6. SegmentIterator对应了一个Segment的数据读取，Segment的读取会根据查询条件与
+    索引进行计算找到读取的对应行号信息，seek到对应的page，对数据进行读取。其
+    中，经过过滤条件后会对可访问的行信息生成bitmap来记录，BitmapRangeIterator
+    为单独实现的可以按照范围访问这个bitmap的迭代器。
+7. ColumnIterator提供了对列的相关数据和索引统一访问的迭代器。ColumnReader、
+    各个IndexReader等对应了具体的数据和索引信息的读取。
+*/
 class OlapScanner {
 public:
     OlapScanner(RuntimeState* runtime_state, OlapScanNode* parent, bool aggregation,

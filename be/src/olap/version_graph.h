@@ -64,6 +64,8 @@ private:
     // version.end_version + 1.
     // Use adjacency list to describe version graph.
     // In order to speed up the version capture, vertex's edges are sorted by version in descending order.
+    // 图用邻接链表表示，链表所表示的边应该是根据其指向的顶点的 value 来降序排列的，value 越大，则
+    // delta 文件中的 version 越大，该文件就越新
     std::vector<Vertex> _version_graph;
 
     // vertex value --> vertex_index of _version_graph
